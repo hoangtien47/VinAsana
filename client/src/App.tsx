@@ -45,15 +45,15 @@ function AuthenticatedRouter() {
   return (
     <Switch>
       {/* Public routes - only accessible if not logged in */}
-      {!user && (
+      {!user ? (
         <>
           <Route path="/" component={Landing} />
           <Route path="/landing" component={Landing} />
         </>
-      )}
+      ) : null}
       
       {/* Protected routes */}
-      {user && (
+      {user ? (
         <>
           <Route path="/" component={Dashboard} />
           <Route path="/dashboard" component={Dashboard} />
@@ -63,7 +63,7 @@ function AuthenticatedRouter() {
           <Route path="/analytics" component={Analytics} />
           <Route path="/settings" component={Settings} />
         </>
-      )}
+      ) : null}
       
       <Route component={NotFound} />
     </Switch>
