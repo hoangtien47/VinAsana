@@ -265,7 +265,8 @@ export class DatabaseStorage implements IStorage {
         )
       );
     
-    const newOrder = (orderResult?.maxOrder || 0) + 1;
+    // Use 0 as a default if maxOrder is null or undefined
+    const newOrder = (orderResult && typeof orderResult.maxOrder === 'number' ? orderResult.maxOrder : 0) + 1;
     
     const [newTask] = await db
       .insert(tasks)
@@ -557,7 +558,7 @@ export class DatabaseStorage implements IStorage {
       .from(tasks)
       .where(and(
         inArray(tasks.projectId, projectIds),
-        eq(tasks.status, 'done')
+        eq(tasks.status, "done")
       ));
     
     const completedTasks = Number(completedCount?.count || 0);

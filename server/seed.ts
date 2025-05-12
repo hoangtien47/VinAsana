@@ -11,9 +11,14 @@ export async function seedDatabase() {
   try {
     // Check if data already exists
     const existingProjects = await db.select().from(projects);
+    
+    // Clear the database if needed for troubleshooting
     if (existingProjects.length > 0) {
-      console.log('Data already exists in the database. Skipping seeding.');
-      return;
+      await db.delete(tasks);
+      await db.delete(documents);
+      await db.delete(projectMembers);
+      await db.delete(projects);
+      console.log('Cleared existing data to start fresh.');
     }
 
     // Create demo project
@@ -27,46 +32,46 @@ export async function seedDatabase() {
     // Create sample tasks
     const taskData = [
       {
-        title: 'Design mockups',
-        description: 'Create wireframes and design mockups for homepage and product pages',
+        title: 'Thiết kế mockup',
+        description: 'Tạo wireframes và mockups thiết kế cho trang chủ và trang sản phẩm',
         projectId: demoProject.id,
-        status: "in_progress" as const,
-        priority: "high" as const,
+        status: "in_progress",
+        priority: "high",
         dueDate: new Date('2025-05-15'),
         assigneeId: '42565088',
       },
       {
-        title: 'Frontend implementation',
-        description: 'Implement the frontend components using React and Tailwind CSS',
+        title: 'Xây dựng frontend',
+        description: 'Triển khai các thành phần frontend sử dụng React và Tailwind CSS',
         projectId: demoProject.id,
-        status: "todo" as const,
-        priority: "medium" as const,
+        status: "todo",
+        priority: "medium",
         dueDate: new Date('2025-06-01'),
         assigneeId: '42565088',
       },
       {
-        title: 'Backend API development',
-        description: 'Create REST APIs for product catalog and user management',
+        title: 'Phát triển API backend',
+        description: 'Tạo REST API cho danh mục sản phẩm và quản lý người dùng',
         projectId: demoProject.id,
-        status: "todo" as const,
-        priority: "high" as const,
+        status: "todo",
+        priority: "high",
         dueDate: new Date('2025-06-15'),
         assigneeId: '42565088',
       },
       {
-        title: 'User testing',
-        description: 'Conduct user testing sessions to gather feedback on usability',
+        title: 'Kiểm thử người dùng',
+        description: 'Tiến hành các phiên kiểm thử người dùng để thu thập phản hồi về tính khả dụng',
         projectId: demoProject.id,
-        status: "backlog" as const,
-        priority: "medium" as const,
+        status: "backlog",
+        priority: "medium",
         dueDate: new Date('2025-07-01'),
       },
       {
-        title: 'Content migration',
-        description: 'Migrate existing content to the new website structure',
+        title: 'Di chuyển nội dung',
+        description: 'Di chuyển nội dung hiện có sang cấu trúc trang web mới',
         projectId: demoProject.id,
-        status: "backlog" as const,
-        priority: "low" as const,
+        status: "backlog",
+        priority: "low",
         dueDate: new Date('2025-07-15'),
       },
     ];
