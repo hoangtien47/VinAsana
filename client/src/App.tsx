@@ -36,15 +36,26 @@ function AuthenticatedRouter() {
     return null;
   }
 
+  // If user is authenticated and on homepage, redirect to dashboard
+  if (user && (location === "/" || location === "/landing")) {
+    window.location.href = "/dashboard";
+    return null;
+  }
+  
   return (
     <Switch>
-      {/* Public routes */}
-      <Route path="/" component={Landing} />
-      <Route path="/landing" component={Landing} />
+      {/* Public routes - only accessible if not logged in */}
+      {!user && (
+        <>
+          <Route path="/" component={Landing} />
+          <Route path="/landing" component={Landing} />
+        </>
+      )}
       
       {/* Protected routes */}
       {user && (
         <>
+          <Route path="/" component={Dashboard} />
           <Route path="/dashboard" component={Dashboard} />
           <Route path="/tasks" component={Tasks} />
           <Route path="/documents" component={Documents} />
