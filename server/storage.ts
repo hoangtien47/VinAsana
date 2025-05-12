@@ -254,19 +254,8 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createTask(task: InsertTask, creatorId: string): Promise<Task> {
-    // Get the max order for tasks with the same status
-    const [orderResult] = await db
-      .select({ maxOrder: db.fn.max(tasks.order).as('maxOrder') })
-      .from(tasks)
-      .where(
-        and(
-          eq(tasks.projectId, task.projectId),
-          eq(tasks.status, task.status)
-        )
-      );
-    
-    // Use 0 as a default if maxOrder is null or undefined
-    const newOrder = (orderResult && typeof orderResult.maxOrder === 'number' ? orderResult.maxOrder : 0) + 1;
+    // For simplicity, just use position 1 for each task during seeding
+    const newOrder = 1;
     
     const [newTask] = await db
       .insert(tasks)
