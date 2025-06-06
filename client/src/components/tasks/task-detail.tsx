@@ -31,12 +31,14 @@ import {
 import { cn, getInitials, formatDate, getStatusColor, getPriorityColor } from "@/lib/utils";
 import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
+import { useUser } from "@/hooks/use-user";
 import { queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
+import { Task, Comment } from "@/hooks/use-task";
 
 interface User {
   id: string;
@@ -44,16 +46,6 @@ interface User {
   lastName?: string;
   email?: string;
   profileImageUrl?: string;
-}
-
-interface Comment {
-  id: number;
-  text: string;
-  taskId: number;
-  userId: string;
-  user: User;
-  createdAt: string;
-  updatedAt: string;
 }
 
 interface Attachment {
@@ -67,29 +59,12 @@ interface Attachment {
   createdAt: string;
 }
 
-interface Task {
-  id: number;
-  title: string;
-  description?: string;
-  status: string;
-  priority: string;
-  projectId: number;
-  assigneeId?: string;
-  creatorId: string;
-  dueDate?: string;
-  createdAt: string;
-  updatedAt: string;
-  order: number;
-  assignee?: User;
-  creator?: User;
-}
-
 interface TaskDetailProps {
   open: boolean;
   onClose: () => void;
   task: Task | null;
   onEdit: (task: Task) => void;
-  onDelete: (taskId: number) => void;
+  onDelete: (taskId: string) => void;
   projectId: number;
 }
 
@@ -102,9 +77,9 @@ export function TaskDetail({
   projectId
 }: TaskDetailProps) {
   const { user } = useAuth();
+  const { users } = useUser();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
-  const [comments, setComments] = useState<Comment[]>([]);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [newComment, setNewComment] = useState("");
   const [isSubmittingComment, setIsSubmittingComment] = useState(false);
@@ -114,28 +89,12 @@ export function TaskDetail({
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
 
-  // Load comments when task changes
+  // Load attachments when task changes
   useEffect(() => {
     if (task) {
-      loadComments();
       loadAttachments();
     }
   }, [task]);
-
-  const loadComments = async () => {
-    if (!task) return;
-    
-    try {
-      const response = await fetch(`/api/tasks/${task.id}/comments`);
-      if (response.ok) {
-        const data = await response.json();
-        setComments(data);
-      }
-    } catch (error) {
-      console.error("Failed to load comments:", error);
-    }
-  };
-
   const loadAttachments = async () => {
     if (!task) return;
     
@@ -157,11 +116,12 @@ export function TaskDetail({
     
     try {
       await apiRequest('POST', `/api/tasks/${task.id}/comments`, {
-        text: newComment,
+        content: newComment,
       });
       
       setNewComment("");
-      await loadComments();
+      // Refresh the task data to get updated comments
+      queryClient.invalidateQueries({ queryKey: ["tasks"] });
       toast({
         title: "Comment added",
         description: "Your comment has been added successfully."
@@ -177,22 +137,16 @@ export function TaskDetail({
       setIsSubmittingComment(false);
     }
   };
-
   const handleDeleteTask = async () => {
     if (!task) return;
     
     setIsLoading(true);
     
     try {
-      await apiRequest('DELETE', `/api/tasks/${task.id}`, undefined);
-      queryClient.invalidateQueries({ queryKey: [`/api/projects/${projectId}/tasks`] });
-      onDelete(task.id);
+      // Use the onDelete callback which properly calls the useTask hook
+      await onDelete(task.id);
       setIsDeleteDialogOpen(false);
       onClose();
-      toast({
-        title: "Task deleted",
-        description: "The task has been deleted successfully."
-      });
     } catch (error) {
       console.error("Failed to delete task:", error);
       toast({
@@ -319,8 +273,7 @@ export function TaskDetail({
                 {task.priority}
               </Badge>
             </div>
-            
-            <div className="flex items-center space-x-2 pt-2">
+              <div className="flex items-center space-x-2 pt-2">
               <div className="text-sm text-gray-500 min-w-[80px]">Assignee:</div>
               {task.assignee ? (
                 <div className="flex items-center">
@@ -330,24 +283,28 @@ export function TaskDetail({
                   </Avatar>
                   <span>{task.assignee.firstName} {task.assignee.lastName}</span>
                 </div>
+              ) : task.assigneeId ? (
+                (() => {
+                  const assignedUser = users?.find(u => u.id === task.assigneeId);
+                  return assignedUser ? (
+                    <div className="flex items-center">
+                      <Avatar className="h-6 w-6 mr-2">
+                        <AvatarImage src={assignedUser.avatar} />
+                        <AvatarFallback>{getInitials(`${assignedUser.nickname || ''} `)}</AvatarFallback>
+                      </Avatar>
+                      <span>{assignedUser.nickname}</span>
+                    </div>
+                  ) : (
+                    <span className="text-sm text-gray-500">User {task.assigneeId}</span>
+                  );
+                })()
               ) : (
                 <span className="text-sm text-gray-500">Unassigned</span>
               )}
             </div>
-            
-            <div className="flex items-center space-x-2">
-              <div className="text-sm text-gray-500 min-w-[80px]">Created by:</div>
-              {task.creator ? (
-                <div className="flex items-center">
-                  <Avatar className="h-6 w-6 mr-2">
-                    <AvatarImage src={task.creator.profileImageUrl} />
-                    <AvatarFallback>{getInitials(`${task.creator.firstName || ''} ${task.creator.lastName || ''}`)}</AvatarFallback>
-                  </Avatar>
-                  <span>{task.creator.firstName} {task.creator.lastName}</span>
-                </div>
-              ) : (
-                <span className="text-sm text-gray-500">Unknown</span>
-              )}
+              <div className="flex items-center space-x-2">
+              <div className="text-sm text-gray-500 min-w-[80px]">Task ID:</div>
+              <span className="text-sm">#{task.id}</span>
             </div>
           </div>
           
@@ -393,30 +350,41 @@ export function TaskDetail({
               <div className="text-sm text-gray-500 text-center py-2">No attachments</div>
             )}
           </div>
-          
-          {/* Comments section */}
+            {/* Comments section */}
           <div>
             <h3 className="text-sm font-medium flex items-center mb-3">
-              <MessageSquare className="h-4 w-4 mr-1" /> Comments
+              <MessageSquare className="h-4 w-4 mr-1" /> Comments ({task.comments?.length || 0})
             </h3>
-            
-            <div className="space-y-4 mb-4">
-              {comments.length > 0 ? (
-                comments.map((comment) => (
-                  <div key={comment.id} className="flex space-x-3">
-                    <Avatar className="h-8 w-8">
-                      <AvatarImage src={comment.user.profileImageUrl} />
-                      <AvatarFallback>{getInitials(`${comment.user.firstName || ''} ${comment.user.lastName || ''}`)}</AvatarFallback>
-                    </Avatar>
-                    <div className="flex-1">
-                      <div className="flex items-center justify-between">
-                        <p className="text-sm font-medium">{comment.user.firstName} {comment.user.lastName}</p>
-                        <span className="text-xs text-gray-500">{format(new Date(comment.createdAt), 'MMM d, yyyy h:mm a')}</span>
+              <div className="space-y-4 mb-4">
+              {task.comments && task.comments.length > 0 ? (
+                task.comments.map((comment) => {
+                  const commentUser = users?.find(u => u.id === comment.userId);
+                  return (
+                    <div key={comment.id} className="flex space-x-3">
+                      <Avatar className="h-8 w-8">
+                        <AvatarImage src={commentUser?.avatar} />
+                        <AvatarFallback>
+                          {commentUser ? 
+                            getInitials(`${commentUser.nickname || ''}`) : 
+                            comment.userId.charAt(0).toUpperCase()
+                          }
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1">
+                        <div className="flex items-center justify-between">
+                          <p className="text-sm font-medium">
+                            {commentUser ? 
+                              `${commentUser.nickname || ''}`.trim() || commentUser.email :
+                              `User ${comment.userId}`
+                            }
+                          </p>
+                          <span className="text-xs text-gray-500">Just now</span>
+                        </div>
+                        <p className="text-sm mt-1 text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{comment.content}</p>
                       </div>
-                      <p className="text-sm mt-1 text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{comment.text}</p>
                     </div>
-                  </div>
-                ))
+                  );
+                })
               ) : (
                 <div className="text-sm text-gray-500 text-center py-2">No comments yet</div>
               )}

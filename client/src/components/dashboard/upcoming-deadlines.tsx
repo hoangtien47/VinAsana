@@ -7,7 +7,7 @@ import { getInitials } from "@/lib/utils";
 import { Link } from "wouter";
 
 interface Task {
-  id: number;
+  id: string;
   title: string;
   status: string;
   priority: string;

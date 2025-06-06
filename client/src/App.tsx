@@ -6,17 +6,27 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/not-found";
 import Dashboard from "@/pages/dashboard";
 import Tasks from "@/pages/tasks";
+import Projects from "@/pages/projects";
 import Documents from "@/pages/documents";
 import Team from "@/pages/team";
 import Analytics from "@/pages/analytics";
 import Settings from "@/pages/settings";
 import Landing from "@/pages/landing";
 import { useAuth } from "@/hooks/use-auth";
+import { useAppearance } from "@/hooks/use-appearance";
+import { useWebSocketNotifications } from "@/hooks/use-websocket-notifications";
+import { I18nProvider } from "@/hooks/use-i18n";
 import { Loader2 } from "lucide-react";
 
 function AuthenticatedRouter() {
-  const { user, isLoading } = useAuth();
+  const { user, isLoading, isAuthenticated } = useAuth();
   const [location] = useLocation();
+
+  // Initialize appearance settings globally
+  useAppearance();
+
+  // Initialize WebSocket notifications for authenticated users
+  useWebSocketNotifications();
 
   // Public routes that don't require authentication
   const publicRoutes = ['/', '/landing'];
@@ -32,7 +42,7 @@ function AuthenticatedRouter() {
 
   if (!user && !isPublicRoute) {
     // Redirect to login when not authenticated and not on public route
-    window.location.href = '/api/login';
+    window.location.href = '/landing';
     return null;
   }
 
@@ -57,6 +67,7 @@ function AuthenticatedRouter() {
         <>
           <Route path="/" component={Dashboard} />
           <Route path="/dashboard" component={Dashboard} />
+          <Route path="/projects" component={Projects} />
           <Route path="/tasks" component={Tasks} />
           <Route path="/documents" component={Documents} />
           <Route path="/team" component={Team} />
@@ -73,10 +84,12 @@ function AuthenticatedRouter() {
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <Toaster />
-        <AuthenticatedRouter />
-      </TooltipProvider>
+      <I18nProvider>
+        <TooltipProvider>
+          <Toaster />
+          <AuthenticatedRouter />
+        </TooltipProvider>
+      </I18nProvider>
     </QueryClientProvider>
   );
 }

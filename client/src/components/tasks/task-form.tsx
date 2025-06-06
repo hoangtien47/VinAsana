@@ -3,6 +3,7 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { format } from "date-fns";
 import { CalendarIcon, X } from "lucide-react";
+import { useEffect } from "react";
 
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
@@ -14,18 +15,17 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn, getInitials } from "@/lib/utils";
-import { taskPriorityEnum, taskStatusEnum } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
-import { useQuery } from "@tanstack/react-query";
+import { useUser } from "@/hooks/use-user";
 
 // Extended schema for task form with validation
 const taskFormSchema = z.object({
   title: z.string().min(1, { message: "Title is required" }).max(100),
   description: z.string().optional(),
-  status: z.enum(["backlog", "todo", "in_progress", "review", "done"]),
+  status: z.enum([ "todo", "in_progress", "in_review", "done"]),
   priority: z.enum(["low", "medium", "high", "urgent"]),
   projectId: z.number(),
-  assigneeId: z.string().optional(),
+  assigneeId: z.string().optional().or(z.literal(undefined)),
   dueDate: z.date().optional(),
   order: z.number().optional(),
 });
@@ -50,26 +50,39 @@ export function TaskForm({
   isEditMode = false
 }: TaskFormProps) {
   const { toast } = useToast();
-  
-  // Fetch project members for assignee selection
-  const { data: members, isLoading: isLoadingMembers } = useQuery({
-    queryKey: [`/api/projects/${projectId}/members`],
-    enabled: open,
-  });
-
+  const { users, isLoading: isLoadingUsers } = useUser();
   const form = useForm<TaskFormValues>({
     resolver: zodResolver(taskFormSchema),
     defaultValues: {
-      title: defaultValues?.title || "",
-      description: defaultValues?.description || "",
-      status: defaultValues?.status || "todo",
-      priority: defaultValues?.priority || "medium",
+      title: "",
+      description: "",
+      status: "todo",
+      priority: "medium",
       projectId: projectId,
-      assigneeId: defaultValues?.assigneeId || undefined,
-      dueDate: defaultValues?.dueDate ? new Date(defaultValues.dueDate) : undefined,
-      order: defaultValues?.order || 0,
+      assigneeId: undefined,
+      dueDate: undefined,
+      order: 0,
     },
   });
+
+  // Reset form when defaultValues change or when opening the dialog
+  useEffect(() => {
+    if (open) {
+      const formValues = {
+        title: defaultValues?.title || "",
+        description: defaultValues?.description || "",
+        status: defaultValues?.status || "todo",
+        priority: defaultValues?.priority || "medium",
+        projectId: projectId,
+        assigneeId: defaultValues?.assigneeId || undefined,
+        dueDate: defaultValues?.dueDate ? new Date(defaultValues.dueDate) : undefined,
+        order: defaultValues?.order || 0,
+      };
+      
+      console.log("Resetting form with values:", formValues); // Debug log
+      form.reset(formValues);
+    }
+  }, [open, defaultValues, projectId, form]);
 
   const handleSubmit = async (values: TaskFormValues) => {
     try {
@@ -148,13 +161,11 @@ export function TaskForm({
                         <SelectTrigger>
                           <SelectValue placeholder="Select status" />
                         </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {(Object.keys(taskStatusEnum.enumValues) as Array<keyof typeof taskStatusEnum.enumValues>).map((status) => (
-                          <SelectItem key={status} value={status}>
-                            {status.charAt(0).toUpperCase() + status.slice(1).replace('_', ' ')}
-                          </SelectItem>
-                        ))}
+                      </FormControl>                      <SelectContent>
+                        <SelectItem value="todo">To Do</SelectItem>
+                        <SelectItem value="in_progress">In Progress</SelectItem>
+                        <SelectItem value="in_review">In Review</SelectItem>
+                        <SelectItem value="done">Done</SelectItem>
                       </SelectContent>
                     </Select>
                     <FormMessage />
@@ -176,47 +187,46 @@ export function TaskForm({
                         <SelectTrigger>
                           <SelectValue placeholder="Select priority" />
                         </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {(Object.keys(taskPriorityEnum.enumValues) as Array<keyof typeof taskPriorityEnum.enumValues>).map((priority) => (
-                          <SelectItem key={priority} value={priority}>
-                            {priority.charAt(0).toUpperCase() + priority.slice(1)}
-                          </SelectItem>
-                        ))}
+                      </FormControl>                      <SelectContent>
+                        <SelectItem value="low">Low</SelectItem>
+                        <SelectItem value="medium">Medium</SelectItem>
+                        <SelectItem value="high">High</SelectItem>
+                        <SelectItem value="urgent">Urgent</SelectItem>
                       </SelectContent>
                     </Select>
                     <FormMessage />
                   </FormItem>
                 )}
               />
-              
-              <FormField
+                <FormField
                 control={form.control}
                 name="assigneeId"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Assignee</FormLabel>
                     <Select
-                      onValueChange={field.onChange}
-                      defaultValue={field.value}
+                      onValueChange={(value) => {
+                        // Convert "unassigned" back to undefined
+                        field.onChange(value === "unassigned" ? undefined : value);
+                      }}
+                      defaultValue={field.value || "unassigned"}
                     >
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue placeholder="Assign to..." />
                         </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="">Unassigned</SelectItem>
-                        {members?.map((member: any) => (
-                          <SelectItem key={member.userId} value={member.userId}>
+                      </FormControl>                      <SelectContent>
+                        <SelectItem value="unassigned">Unassigned</SelectItem>
+                        {users.map((user) => (
+                          <SelectItem key={user.id} value={user.id}>
                             <div className="flex items-center">
                               <Avatar className="h-6 w-6 mr-2">
-                                <AvatarImage src={member.user.profileImageUrl} />
+                                <AvatarImage src={user.avatar} />
                                 <AvatarFallback>
-                                  {getInitials(`${member.user.firstName || ''} ${member.user.lastName || ''}`)}
+                                  {getInitials(`${user.nickname || ''}`)}
                                 </AvatarFallback>
                               </Avatar>
-                              {member.user.firstName} {member.user.lastName}
+                              {user.nickname} ({user.email})
                             </div>
                           </SelectItem>
                         ))}

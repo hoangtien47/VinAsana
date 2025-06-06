@@ -1,7 +1,10 @@
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
+import { useAuth0 } from "@auth0/auth0-react";
 
 export default function Landing() {
+  const { loginWithRedirect } = useAuth0();
+
   return (
     <div className="min-h-screen flex flex-col">
       <header className="px-4 lg:px-6 h-14 flex items-center border-b">
@@ -10,7 +13,7 @@ export default function Landing() {
         </Link>
         <nav className="ml-auto flex gap-4 sm:gap-6">
           <a
-            href="/api/login"
+            onClick={() => loginWithRedirect()}
             className="text-sm font-medium hover:underline underline-offset-4"
           >
             Log In
@@ -31,9 +34,11 @@ export default function Landing() {
                   </p>
                 </div>
                 <div className="flex flex-col gap-2 min-[400px]:flex-row">
-                  <a href="/api/login">
-                    <Button size="lg">Get Started</Button>
-                  </a>
+                  
+                    <Button size="lg" onClick={() => loginWithRedirect()}>
+                      Get Started
+                    </Button>
+                  
                 </div>
               </div>
               <div className="flex flex-col justify-center">

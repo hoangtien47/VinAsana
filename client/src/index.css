@@ -2,6 +2,22 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Prevent flash of unstyled content (FOUC) */
+html {
+  /* Default to light theme to prevent flash */
+  background-color: hsl(0 0% 100%);
+  transition: background-color 0.15s ease;
+}
+
+html.dark {
+  /* Dark theme background */
+  background-color: hsl(240 10% 3.9%);
+}
+
+body {
+  background-color: transparent;
+}
+
 :root {
       --background: 0 0% 100%;
 --foreground: 20 14.3% 4.1%;
@@ -46,6 +62,126 @@
 --ring: 240 4.9% 83.9%;
 --radius: 0.5rem;
   }
+
+/* Prevent flash of unstyled content (FOUC) */
+html {
+  /* Default to light theme to prevent flash */
+  background-color: hsl(0 0% 100%);
+  transition: background-color 0.15s ease;
+}
+
+html.dark {
+  /* Dark theme background */
+  background-color: hsl(240 10% 3.9%);
+}
+
+body {
+  background-color: transparent;
+}
+
+/* Density Settings */
+.density-compact {
+  --spacing-unit: 0.5;
+}
+
+.density-comfortable {
+  --spacing-unit: 1;
+}
+
+.density-spacious {
+  --spacing-unit: 1.5;
+}
+
+/* Apply density to common elements */
+.density-compact .kanban-card {
+  @apply p-3 mb-2;
+}
+
+.density-comfortable .kanban-card {
+  @apply p-4 mb-3;
+}
+
+.density-spacious .kanban-card {
+  @apply p-6 mb-4;
+}
+
+/* Sidebar spacing adjustments */
+.density-compact .sidebar-item {
+  @apply py-1 px-3;
+}
+
+.density-comfortable .sidebar-item {
+  @apply py-2 px-4;
+}
+
+.density-spacious .sidebar-item {
+  @apply py-3 px-6;
+}
+
+/* Form spacing adjustments */
+.density-compact .form-section {
+  @apply space-y-2;
+}
+
+.density-comfortable .form-section {
+  @apply space-y-4;
+}
+
+.density-spacious .form-section {
+  @apply space-y-6;
+}
+
+/* Density Settings */
+.density-compact {
+  --spacing-unit: 0.5;
+}
+
+.density-comfortable {
+  --spacing-unit: 1;
+}
+
+.density-spacious {
+  --spacing-unit: 1.5;
+}
+
+/* Apply density to common elements */
+.density-compact .kanban-card {
+  @apply p-3 mb-2;
+}
+
+.density-comfortable .kanban-card {
+  @apply p-4 mb-3;
+}
+
+.density-spacious .kanban-card {
+  @apply p-6 mb-4;
+}
+
+/* Sidebar spacing adjustments */
+.density-compact .sidebar-item {
+  @apply py-1 px-3;
+}
+
+.density-comfortable .sidebar-item {
+  @apply py-2 px-4;
+}
+
+.density-spacious .sidebar-item {
+  @apply py-3 px-6;
+}
+
+/* Form spacing adjustments */
+.density-compact .form-section {
+  @apply space-y-2;
+}
+
+.density-comfortable .form-section {
+  @apply space-y-4;
+}
+
+.density-spacious .form-section {
+  @apply space-y-6;
+}
 
 @layer base {
   * {

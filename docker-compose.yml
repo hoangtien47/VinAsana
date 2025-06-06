@@ -1,0 +1,73 @@
+version: "3.8"
+name: "meikocn"
+services:
+  db:
+    container_name: meikocn-postgresql
+    image: postgres:14.1-alpine
+    environment:
+      - POSTGRES_USER=meikocn
+      - POSTGRES_PASSWORD=meikocn
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./volumes/db:/var/lib/postgresql/data
+    networks:
+      - meikocn-network
+  redis:
+    image: redis:6.2-alpine
+    container_name: meikocn-redis
+    ports:
+      - "6379:6379"
+    # User default
+    command: redis-server --loglevel warning --requirepass eYVX7EwVmmxKPCDmwMtyKVge8oLd2t81
+    volumes:
+      - ./volumes/cache:/data
+    networks:
+      - meikocn-network
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: meikocn-rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+      - "61613:61613"
+    environment:
+      RABBITMQ_DEFAULT_USER: meikocn
+      RABBITMQ_DEFAULT_PASS: meikocn
+    command: bash -c "rabbitmq-plugins enable --offline rabbitmq_stomp && rabbitmq-server"
+    volumes:
+      - ./volumes/rabbitmq/data/:/var/lib/rabbitmq/
+      - ./volumes/rabbitmq/log/:/var/log/rabbitmq
+    networks:
+      - meikocn-network
+  api:
+    container_name: meikocn-api
+    image: kelvn/meikocn-api:sha-d39a2fc
+  #    build:
+  #      context: .
+  #      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    networks:
+      - meikocn-network
+    depends_on:
+      - db
+  grafana:
+    container_name: meikocn-lgtm
+    image: 'docker.io/grafana/otel-lgtm:latest'
+    ports:
+      - '3000:3000'
+      - '4317:4317'
+      - '4318:4318'
+    volumes:
+      - './volumes/grafana:/data/grafana'
+      - './volumes/prometheus:/data/prometheus'
+      - './volumes/loki:/loki'
+    networks:
+      - meikocn-network
+    environment:
+      - GF_PATHS_DATA=/data/grafana
+
+
+networks:
+  meikocn-network: {}

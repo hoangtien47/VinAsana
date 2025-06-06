@@ -2,7 +2,8 @@ import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { 
   LayoutDashboard, 
-  CheckSquare, 
+  CheckSquare,
+  FolderOpen,
   FileText, 
   Users, 
   BarChart2, 
@@ -15,7 +16,10 @@ import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
+import { useI18n } from "@/hooks/use-i18n";
 import { getInitials } from "@/lib/utils";
+import { useAuth0 } from "@auth0/auth0-react"; // Import Auth0 hook
+
 
 interface SidebarProps {
   className?: string;
@@ -24,36 +28,49 @@ interface SidebarProps {
 export function Sidebar({ className }: SidebarProps) {
   const [location] = useLocation();
   const { user } = useAuth();
+  const { logout } = useAuth0(); // Get logout function from Auth0
+  const { t } = useI18n();
   const [isMobileOpen, setIsMobileOpen] = useState(false);
 
-  const navItems = [
+  const handleLogout = () => {
+    logout({ 
+      logoutParams: {
+        returnTo: window.location.origin // Redirect to the homepage after logout
+      }
+    });
+  };  const navItems = [
     {
-      name: "Dashboard",
+      name: t("navigation.dashboard"),
       path: "/dashboard",
       icon: <LayoutDashboard className="h-5 w-5" />,
     },
     {
-      name: "Tasks",
+      name: t("navigation.projects"),
+      path: "/projects",
+      icon: <FolderOpen className="h-5 w-5" />,
+    },
+    {
+      name: t("navigation.tasks"),
       path: "/tasks",
       icon: <CheckSquare className="h-5 w-5" />,
     },
     {
-      name: "Documents",
+      name: t("navigation.documents"),
       path: "/documents",
       icon: <FileText className="h-5 w-5" />,
     },
     {
-      name: "Team",
+      name: t("navigation.team"),
       path: "/team",
       icon: <Users className="h-5 w-5" />,
     },
     {
-      name: "Analytics",
+      name: t("navigation.analytics"),
       path: "/analytics",
       icon: <BarChart2 className="h-5 w-5" />,
     },
     {
-      name: "Settings",
+      name: t("navigation.settings"),
       path: "/settings",
       icon: <Settings className="h-5 w-5" />,
     },
@@ -105,15 +122,13 @@ export function Sidebar({ className }: SidebarProps) {
           >
             <X className="h-5 w-5" />
           </Button>
-        </div>
-
-        <div className="flex-1 overflow-auto py-2">
+        </div>        <div className="flex-1 overflow-auto py-2">
           <nav className="grid gap-1 px-2">
             {navItems.map((item, index) => (
               <Link key={index} to={item.path}>
                 <div
                   className={cn(
-                    "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium hover:bg-gray-100 dark:hover:bg-gray-800",
+                    "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium hover:bg-gray-100 dark:hover:bg-gray-800 sidebar-item",
                     location === item.path &&
                       "bg-gray-100 text-primary dark:bg-gray-800"
                   )}
@@ -148,12 +163,12 @@ export function Sidebar({ className }: SidebarProps) {
                   ? `${user.firstName} ${user.lastName}` 
                   : user?.email}
               </div>
-              <Link 
-                to="/api/logout" 
-                className="text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
-              >
-                Logout
-              </Link>
+            <button 
+              onClick={handleLogout}
+              className="text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+            >
+              Logout
+            </button>
             </div>
           </div>
         </div>

@@ -24,7 +24,7 @@ import { useToast } from "@/hooks/use-toast";
 import { addDays, format, startOfMonth, endOfMonth, eachWeekOfInterval, startOfWeek, endOfWeek, eachDayOfInterval } from "date-fns";
 
 interface Task {
-  id: number;
+  id: string;
   title: string;
   status: string;
   priority: string;

@@ -4,18 +4,31 @@ import path from "path";
 import runtimeErrorOverlay from "@replit/vite-plugin-runtime-error-modal";
 
 export default defineConfig({
-  plugins: [
-    react(),
-    runtimeErrorOverlay(),
-    ...(process.env.NODE_ENV !== "production" &&
-    process.env.REPL_ID !== undefined
-      ? [
-          await import("@replit/vite-plugin-cartographer").then((m) =>
-            m.cartographer(),
-          ),
-        ]
-      : []),
-  ],
+  // plugins: [
+  //   react(),
+  //   runtimeErrorOverlay(),
+  //   ...(process.env.NODE_ENV !== "production" &&
+  //   process.env.REPL_ID !== undefined
+  //     ? [
+  //         await import("@replit/vite-plugin-cartographer").then((m) =>
+  //           m.cartographer(),
+  //         ),
+  //       ]
+  //     : []),
+  // ],
+  // resolve: {
+  //   alias: {
+  //     "@": path.resolve(import.meta.dirname, "client", "src"),
+  //     "@shared": path.resolve(import.meta.dirname, "shared"),
+  //     "@assets": path.resolve(import.meta.dirname, "attached_assets"),
+  //   },
+  // },
+  // root: path.resolve(import.meta.dirname, "client"),
+  // build: {
+  //   outDir: path.resolve(import.meta.dirname, "dist/public"),
+  //   emptyOutDir: true,
+  // },
+  plugins: [react()],
   resolve: {
     alias: {
       "@": path.resolve(import.meta.dirname, "client", "src"),
@@ -23,9 +36,12 @@ export default defineConfig({
       "@assets": path.resolve(import.meta.dirname, "attached_assets"),
     },
   },
-  root: path.resolve(import.meta.dirname, "client"),
+  root: path.resolve(import.meta.dirname, "client"), // Set the root to the client folder
   build: {
-    outDir: path.resolve(import.meta.dirname, "dist/public"),
+    outDir: path.resolve(import.meta.dirname, "dist/public"), // Output build files to dist/public
     emptyOutDir: true,
+  },
+  server: {
+    port: 4040, // Default port for Vite
   },
 });

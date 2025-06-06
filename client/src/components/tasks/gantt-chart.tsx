@@ -7,7 +7,7 @@ import { format, addDays, startOfWeek, addWeeks, subWeeks, isWithinInterval, isT
 import { getStatusColor, getPriorityColor } from "@/lib/utils";
 
 interface Task {
-  id: number;
+  id: string;
   title: string;
   status: string;
   priority: string;

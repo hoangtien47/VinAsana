@@ -30,9 +30,8 @@ import { getInitials } from "@/lib/utils";
 
 interface User {
   id: string;
-  firstName?: string;
-  lastName?: string;
-  profileImageUrl?: string;
+  nickname?: string;
+  avatar?: string;
 }
 
 interface TaskFilterProps {
@@ -48,17 +47,16 @@ export interface FilterOptions {
   assigneeId?: string;
 }
 
+
 export function TaskFilter({ onFilterChange, users = [], className }: TaskFilterProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
   const [selectedPriorities, setSelectedPriorities] = useState<string[]>([]);
   const [selectedAssignee, setSelectedAssignee] = useState<string | undefined>(undefined);
-  
-  const statusOptions = [
-    { value: "backlog", label: "Backlog" },
+    const statusOptions = [
     { value: "todo", label: "To Do" },
     { value: "in_progress", label: "In Progress" },
-    { value: "review", label: "Review" },
+    { value: "in_review", label: "In Review" },
     { value: "done", label: "Done" },
   ];
   
@@ -260,10 +258,10 @@ export function TaskFilter({ onFilterChange, users = [], className }: TaskFilter
                   <SelectItem key={user.id} value={user.id}>
                     <div className="flex items-center">
                       <Avatar className="h-5 w-5 mr-2">
-                        <AvatarImage src={user.profileImageUrl} />
-                        <AvatarFallback>{getInitials(`${user.firstName || ''} ${user.lastName || ''}`)}</AvatarFallback>
+                        <AvatarImage src={user.avatar} />
+                        <AvatarFallback>{getInitials(`${user.nickname || ''}`)}</AvatarFallback>
                       </Avatar>
-                      {user.firstName} {user.lastName}
+                      {user.nickname}
                     </div>
                   </SelectItem>
                 ))}
@@ -312,7 +310,7 @@ export function TaskFilter({ onFilterChange, users = [], className }: TaskFilter
                   <span>
                     Assignee: {selectedAssignee === "unassigned" 
                       ? "Unassigned" 
-                      : `${users.find(u => u.id === selectedAssignee)?.firstName || ''} ${users.find(u => u.id === selectedAssignee)?.lastName || ''}`}
+                      : `${users.find(u => u.id === selectedAssignee)?.nickname || ''}`}
                   </span>
                   <X 
                     className="h-3 w-3 cursor-pointer" 

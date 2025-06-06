@@ -24,7 +24,7 @@ export function TaskOverview({ statusDistribution, priorityDistribution }: TaskO
           {/* Status Distribution */}
           <div className="space-y-4">
             <h4 className="text-sm font-medium">Status Distribution</h4>
-            <div className="h-[200px]">
+            <div className="h-[300px]">
               <DonutChart
                 data={statusDistribution}
                 category="value"
@@ -53,7 +53,7 @@ export function TaskOverview({ statusDistribution, priorityDistribution }: TaskO
           {/* Priority Distribution */}
           <div className="space-y-4">
             <h4 className="text-sm font-medium">Priority Distribution</h4>
-            <div className="h-[200px]">
+            <div className="h-[300px]">
               <DonutChart
                 data={priorityDistribution}
                 category="value"

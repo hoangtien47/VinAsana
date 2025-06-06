@@ -7,64 +7,59 @@ import { TaskDetail } from "@/components/tasks/task-detail";
 import { GanttChart } from "@/components/tasks/gantt-chart";
 import { TaskFilter, FilterOptions } from "@/components/tasks/task-filter";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useQuery } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/queryClient";
-import { queryClient } from "@/lib/queryClient";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
+import { useUser } from "@/hooks/use-user";
 import { Button } from "@/components/ui/button";
-import { useParams } from "wouter";
 import { Loader2 } from "lucide-react";
 import { useTask } from "@/hooks/use-task";
+import { useProject } from "@/hooks/use-project";
 
 export default function Tasks() {
   const { user } = useAuth();
   const { toast } = useToast();
-  const { createTask, updateTask } = useTask();
+  const { users } = useUser();
+  
+  // Use the hooks instead of direct queries
+  const { 
+    projects, 
+    isLoading: isLoadingProjects 
+  } = useProject();
+  
+  const {
+    tasks,
+    isLoading: isLoadingTasks,
+    createTask,
+    updateTask,
+    deleteTask,
+    fetchTasks,
+    projectId,
+    setProjectId
+  } = useTask();
+
   const [activeTab, setActiveTab] = useState("kanban");
   const [isTaskFormOpen, setIsTaskFormOpen] = useState(false);
   const [isTaskDetailOpen, setIsTaskDetailOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState<any | null>(null);
   const [isEditMode, setIsEditMode] = useState(false);
   const [filters, setFilters] = useState<FilterOptions>({});
-  const [projectId, setProjectId] = useState<number | null>(null);
-
-  // Get the first project ID for now, in a real application you'd want to get this from the URL
-  const {
-    data: projects,
-    isLoading: isLoadingProjects,
-    error: projectsError,
-  } = useQuery({
-    queryKey: ['/api/projects'],
-    enabled: !!user,
-  });
 
   // Set the first project as active when projects load
   useEffect(() => {
     if (projects && projects.length > 0 && !projectId) {
-      setProjectId(projects[0].id);
+      const firstProjectId = projects[0].id;
+      if (firstProjectId) {        setProjectId(firstProjectId);
+        fetchTasks(firstProjectId);
+      }
     }
-  }, [projects, projectId]);
+  }, [projects, projectId, setProjectId, fetchTasks]);
 
-  // Fetch tasks for the active project
-  const {
-    data: tasks,
-    isLoading: isLoadingTasks,
-    error: tasksError,
-    refetch: refetchTasks,
-  } = useQuery({
-    queryKey: [`/api/projects/${projectId}/tasks`, filters],
-    enabled: !!projectId,
-  });
-
-  // Fetch project members for task assignment
-  const {
-    data: members,
-    isLoading: isLoadingMembers,
-  } = useQuery({
-    queryKey: [`/api/projects/${projectId}/members`],
-    enabled: !!projectId,
-  });
+  // Handle project change
+  const handleProjectChange = (newProjectId: string) => {
+    setProjectId(newProjectId);
+    fetchTasks(newProjectId);
+  };
 
   const handleAddTask = (status: string) => {
     setSelectedTask(null);
@@ -78,33 +73,91 @@ export default function Tasks() {
   };
 
   const handleEditTask = (task: any) => {
+    console.log("Editing task:", task); // Debug log
     setSelectedTask(task);
     setIsEditMode(true);
     setIsTaskDetailOpen(false);
     setIsTaskFormOpen(true);
   };
 
-  const handleDeleteTask = (taskId: number) => {
-    refetchTasks();
+  const handleDeleteTask = async (taskId: string) => {
+    try {
+      await deleteTask(taskId);
+      toast({
+        title: "Task deleted",
+        description: "The task has been deleted successfully."
+      });
+    } catch (error) {
+      console.error("Failed to delete task:", error);
+      toast({
+        title: "Error",
+        description: "Failed to delete task. Please try again.",
+        variant: "destructive"
+      });
+    }
   };
 
   const handleTaskFormSubmit = async (values: any) => {
+    if (!projectId) {
+      toast({
+        title: "Error",
+        description: "Please select a project first.",
+        variant: "destructive"
+      });
+      return;
+    }
+
     try {
+      // Map form priority to API priority (including "urgent" -> "CRITICAL")
+      const priorityMap: Record<string, string> = {
+        "low": "LOW",
+        "medium": "MEDIUM",
+        "high": "HIGH",
+        "urgent": "CRITICAL"
+      };
+
+      // Map form status to API status
+      const statusMap: Record<string, string> = {
+        "todo": "TODO",
+        "in_progress": "IN_PROGRESS",
+        "in_review": "IN_REVIEW",
+        "done": "DONE"
+      };
+
+      // Transform form values to API format with proper typing
+      const apiTaskData = {
+        name: values.title, // Map title to name for API
+        description: values.description || "",
+        status: (statusMap[values.status] || "TODO") as "TODO" | "IN_PROGRESS" | "IN_REVIEW" | "DONE",
+        priority: (priorityMap[values.priority] || "MEDIUM") as "LOW" | "MEDIUM" | "HIGH" | "CRITICAL",
+        startDate: Date.now(),
+        endDate: values.dueDate ? new Date(values.dueDate).getTime() : Date.now() + 7 * 24 * 60 * 60 * 1000,
+        assigneeId: values.assigneeId || "",
+        projectId: projectId.toString() // Ensure it's a string
+      };
+
+      console.log("Submitting task data:", apiTaskData); // Debug log
+
       if (isEditMode && selectedTask) {
-        await updateTask(selectedTask.id, values);
+        // Convert number ID to string for API
+        const taskIdString = typeof selectedTask.id === 'number' ? selectedTask.id.toString() : selectedTask.id;
+        console.log("Updating task with ID:", taskIdString, "Data:", apiTaskData); // Debug log
+        await updateTask({ taskId: taskIdString, taskData: apiTaskData });
         toast({
           title: "Task updated",
           description: "The task has been updated successfully."
         });
       } else {
-        await createTask(values);
+        await createTask(apiTaskData);
         toast({
           title: "Task created",
           description: "The task has been created successfully."
         });
       }
       
-      refetchTasks();
+      setIsTaskFormOpen(false);
+      setSelectedTask(null);
+      setIsEditMode(false);
     } catch (error) {
       console.error("Failed to submit task:", error);
       toast({
@@ -115,6 +168,29 @@ export default function Tasks() {
     }
   };
 
+  // Filter tasks based on filters
+  const filteredTasks = tasks?.filter((task) => {
+    // Handle status filtering (filters.status is an array)
+    if (filters.status && filters.status.length > 0 && !filters.status.includes(task.status)) return false;
+    
+    // Handle priority filtering (filters.priority is an array)
+    if (filters.priority && filters.priority.length > 0 && !filters.priority.includes(task.priority)) return false;
+    
+    // Handle assignee filtering (filters.assigneeId is a string)
+    if (filters.assigneeId && task.assigneeId !== filters.assigneeId) return false;
+    
+    // Handle search filtering
+    if (filters.search && !task.title.toLowerCase().includes(filters.search.toLowerCase())) return false;
+    
+    return true;
+  }) || [];
+
+  // Transform users for the filter component
+  const filterUsers = users.map((user: any) => ({
+    id: user.id,
+    nickname: user.nickname || '',
+    avatar: user.avatar
+  }));
   // Loading state
   if (isLoadingProjects) {
     return (
@@ -149,30 +225,34 @@ export default function Tasks() {
     <div className="flex h-screen overflow-hidden bg-gray-50 dark:bg-gray-900">
       <Sidebar />
       <div className="flex flex-col flex-1 overflow-hidden">
-        <Navbar title="Tasks" subtitle={projects?.find((p: any) => p.id === projectId)?.name} />
-        <div className="flex-1 p-6 flex flex-col space-y-4 overflow-hidden">
-          {/* Project selector */}
+        <Navbar 
+          title="Tasks" 
+          subtitle={projects?.find((p: any) => p.id === projectId)?.name} 
+        />
+        <div className="flex-1 p-6 flex flex-col space-y-4 overflow-hidden">          {/* Project selector */}
           {projects && projects.length > 1 && (
             <div className="flex items-center space-x-2">
-              <span className="text-sm font-medium">Project:</span>
-              <select
-                className="border border-gray-300 rounded-md px-2 py-1 text-sm"
-                value={projectId || ''}
-                onChange={(e) => setProjectId(Number(e.target.value))}
-              >
-                {projects.map((project: any) => (
-                  <option key={project.id} value={project.id}>
-                    {project.name}
-                  </option>
-                ))}
-              </select>
+              <span className="text-sm font-medium">Project:</span>              <Select
+                value={projectId?.toString() || undefined}
+                onValueChange={(value) => handleProjectChange(value)}
+              ><SelectTrigger className="w-[250px]">
+                  <SelectValue placeholder="Select a project" />
+                </SelectTrigger>
+                <SelectContent>
+                  {projects.map((project: any) => (
+                    <SelectItem key={project.id} value={project.id.toString()}>
+                      {project.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           )}
 
           {/* Task filter */}
           <TaskFilter
             onFilterChange={setFilters}
-            users={members?.map((m: any) => m.user) || []}
+            users={filterUsers}
             className="mb-4"
           />
 
@@ -190,11 +270,12 @@ export default function Tasks() {
                 </div>
               ) : (
                 <KanbanBoard
-                  projectId={projectId!}
-                  tasks={tasks || []}
+                  projectId={(projectId || "0")}
+                  tasks={filteredTasks}
                   onTaskClick={handleTaskClick}
                   onAddClick={handleAddTask}
-                  onTasksUpdated={refetchTasks}
+                  onTasksUpdated={() => projectId && fetchTasks(projectId)}
+                  updateTask={updateTask}
                 />
               )}
             </TabsContent>
@@ -206,7 +287,7 @@ export default function Tasks() {
                 </div>
               ) : (
                 <GanttChart
-                  tasks={tasks || []}
+                  tasks={filteredTasks}
                   onTaskClick={handleTaskClick}
                 />
               )}
@@ -216,9 +297,13 @@ export default function Tasks() {
           {/* Task form dialog */}
           <TaskForm
             open={isTaskFormOpen}
-            onClose={() => setIsTaskFormOpen(false)}
+            onClose={() => {
+              setIsTaskFormOpen(false);
+              setSelectedTask(null);
+              setIsEditMode(false);
+            }}
             onSubmit={handleTaskFormSubmit}
-            projectId={projectId!}
+            projectId={parseInt(projectId || "0")}
             defaultValues={isEditMode ? selectedTask : undefined}
             isEditMode={isEditMode}
           />
@@ -226,13 +311,15 @@ export default function Tasks() {
           {/* Task detail sheet */}
           <TaskDetail
             open={isTaskDetailOpen}
-            onClose={() => setIsTaskDetailOpen(false)}
+            onClose={() => {
+              setIsTaskDetailOpen(false);
+              setSelectedTask(null);
+            }}
             task={selectedTask}
             onEdit={handleEditTask}
             onDelete={handleDeleteTask}
-            projectId={projectId!}
-          />
-        </div>
+            projectId={parseInt(projectId || "0")}
+          />        </div>
       </div>
     </div>
   );

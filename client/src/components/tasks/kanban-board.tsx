@@ -1,31 +1,12 @@
 import { useState, useEffect } from "react";
 import { DragDropContext, Droppable, Draggable } from "react-beautiful-dnd";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { formatDate, getInitials, getPriorityColor } from "@/lib/utils";
 import { Plus, AlertCircle, Clock } from "lucide-react";
-import { apiRequest } from "@/lib/queryClient";
-import { useAuth } from "@/hooks/use-auth";
-import { useToast } from "@/hooks/use-toast";
+import { Task, useTask } from "@/hooks/use-task";
 
-interface Task {
-  id: number;
-  title: string;
-  description?: string;
-  status: string;
-  priority: string;
-  dueDate?: string;
-  assigneeId?: string;
-  assignee?: {
-    id: string;
-    firstName: string;
-    lastName: string;
-    profileImageUrl?: string;
-  };
-  order: number;
-}
 
 interface KanbanColumn {
   id: string;
@@ -34,11 +15,12 @@ interface KanbanColumn {
 }
 
 interface KanbanBoardProps {
-  projectId: number;
+  projectId: string;
   tasks: Task[];
   onTaskClick: (task: Task) => void;
   onAddClick: (status: string) => void;
   onTasksUpdated: () => void;
+  updateTask?: (data: { taskId: string; taskData: any }) => void;
 }
 
 export function KanbanBoard({ 
@@ -46,18 +28,15 @@ export function KanbanBoard({
   tasks,
   onTaskClick,
   onAddClick,
-  onTasksUpdated
+  onTasksUpdated,
+  updateTask
 }: KanbanBoardProps) {
-  const { user } = useAuth();
-  const { toast } = useToast();
   const [columns, setColumns] = useState<KanbanColumn[]>([]);
-
   // Define columns
   const columnDefinitions = [
-    { id: "backlog", title: "Backlog" },
     { id: "todo", title: "To Do" },
     { id: "in_progress", title: "In Progress" },
-    { id: "review", title: "Review" },
+    { id: "in_review", title: "In Review" },
     { id: "done", title: "Done" },
   ];
 
@@ -87,10 +66,8 @@ export function KanbanBoard({
       destination.index === source.index
     ) {
       return;
-    }
-
-    // Find the task being dragged
-    const taskId = parseInt(draggableId.replace("task-", ""));
+    }    // Find the task being dragged
+    const taskId = draggableId.replace("task-", "");
     const draggedTask = tasks.find(task => task.id === taskId);
     
     if (!draggedTask) return;
@@ -137,32 +114,57 @@ export function KanbanBoard({
         order: index
       }));
     }
-    
-    setColumns(newColumns);
-    
-    // Update the task in the backend
-    try {
-      await apiRequest('PATCH', `/api/tasks/${taskId}`, {
-        status: destination.droppableId,
-        order: destination.index
-      });
-      
-      // Call the callback to refresh tasks
+      setColumns(newColumns);
+      // Update the task in the backend using the proper updateTask function
+    if (updateTask) {
+      try {        // Map the frontend status to backend status format
+        const statusMap: Record<string, string> = {
+          "todo": "TODO",
+          "in_progress": "IN_PROGRESS", 
+          "in_review": "IN_REVIEW",
+          "done": "DONE"
+        };
+
+        // Map priority to API format 
+        const priorityMap: Record<string, string> = {
+          "low": "LOW",
+          "medium": "MEDIUM",
+          "high": "HIGH",
+          "urgent": "CRITICAL"
+        };
+
+        // Create complete task data for API that matches working edit form structure
+        const updatedTaskData = {
+          name: draggedTask.title,
+          description: draggedTask.description || "",
+          status: (statusMap[destination.droppableId] || "TODO") as "TODO" | "IN_PROGRESS" | "IN_REVIEW" | "DONE",
+          priority: (priorityMap[draggedTask.priority] || "MEDIUM") as "LOW" | "MEDIUM" | "HIGH" | "CRITICAL",
+          startDate: draggedTask.createdAt ? new Date(draggedTask.createdAt).getTime() : Date.now(),
+          endDate: draggedTask.dueDate ? new Date(draggedTask.dueDate).getTime() : Date.now() + 7 * 24 * 60 * 60 * 1000,
+          assigneeId: draggedTask.assigneeId || "",
+          projectId: projectId.toString()
+        };
+        console.log('Updating task with data:', updatedTaskData);
+        console.log('Task ID:', taskId);
+        updateTask({
+          taskId: taskId,
+          taskData: updatedTaskData
+        });
+      } catch (error) {
+        console.error('Failed to update task:', error);
+        // Revert the optimistic update on error
+        setColumns(columns);
+      }
+    } else {
+      // Fallback: just call onTasksUpdated to refresh
       onTasksUpdated();
-    } catch (error) {
-      console.error('Failed to update task:', error);
-      toast({
-        title: 'Failed to update task',
-        description: 'The task could not be updated. Please try again.',
-        variant: 'destructive'
-      });
     }
   };
 
   return (
     <div className="h-full">
       <DragDropContext onDragEnd={handleDragEnd}>
-        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4 h-full">
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-4 gap-2 h-full">
           {columns.map((column) => (
             <div key={column.id} className="flex flex-col h-full">
               <div className="flex items-center justify-between mb-2">
@@ -196,54 +198,56 @@ export function KanbanBoard({
                         draggableId={`task-${task.id}`}
                         index={index}
                       >
-                        {(provided, snapshot) => (
-                          <div
-                            ref={provided.innerRef}
-                            {...provided.draggableProps}
-                            {...provided.dragHandleProps}
-                            onClick={() => onTaskClick(task)}
-                            className={`p-3 mb-2 bg-white dark:bg-gray-800 rounded-md border shadow-sm cursor-pointer ${
-                              snapshot.isDragging ? "shadow-md" : ""
-                            }`}
-                          >
-                            <div className="space-y-2">
-                              <h4 className="text-sm font-medium line-clamp-2">
-                                {task.title}
-                              </h4>
-                              {task.description && (
-                                <p className="text-xs text-gray-500 line-clamp-2">
-                                  {task.description}
-                                </p>
-                              )}
-                              <div className="flex items-center justify-between">
-                                <Badge variant="outline" className={`text-[10px] ${getPriorityColor(task.priority)} text-white bg-opacity-90`}>
-                                  {task.priority}
-                                </Badge>
-                                
-                                {task.dueDate && (
-                                  <div className="flex items-center text-xs text-gray-500">
-                                    <Clock className="h-3 w-3 mr-1" />
-                                    {formatDate(task.dueDate)}
-                                  </div>
+                        {(provided, snapshot) => {
+                          return (
+                            <div
+                              ref={provided.innerRef}
+                              {...provided.draggableProps}
+                              {...provided.dragHandleProps}
+                              onClick={() => onTaskClick(task)}
+                              className={`kanban-card p-3 mb-2 bg-white dark:bg-gray-800 rounded-md border shadow-sm cursor-pointer ${
+                                snapshot.isDragging ? "shadow-md" : ""
+                              }`}
+                            >
+                              <div className="space-y-2">
+                                <h4 className="text-sm font-medium line-clamp-2">
+                                  {task.title}
+                                </h4>
+                                {task.description && (
+                                  <p className="text-xs text-gray-500 line-clamp-2">
+                                    {task.description}
+                                  </p>
                                 )}
-                              </div>
-                              
-                              {task.assignee ? (
-                                <div className="flex justify-end">
-                                  <Avatar className="h-6 w-6">
-                                    <AvatarImage 
-                                      src={task.assignee.profileImageUrl} 
-                                      alt={`${task.assignee.firstName} ${task.assignee.lastName}`} 
-                                    />
-                                    <AvatarFallback>
-                                      {getInitials(`${task.assignee.firstName} ${task.assignee.lastName}`)}
-                                    </AvatarFallback>
-                                  </Avatar>
+                                <div className="flex items-center justify-between">
+                                  <Badge variant="outline" className={`text-[10px] ${getPriorityColor(task.priority)} text-white bg-opacity-90`}>
+                                    {task.priority}
+                                  </Badge>
+                                  
+                                  {task.dueDate && (
+                                    <div className="flex items-center text-xs text-gray-500">
+                                      <Clock className="h-3 w-3 mr-1" />
+                                      {formatDate(task.dueDate)}
+                                    </div>
+                                  )}
                                 </div>
-                              ) : null}
+                                
+                                {task.assignee ? (
+                                  <div className="flex justify-end">
+                                    <Avatar className="h-6 w-6">
+                                      <AvatarImage 
+                                        src={task.assignee.profileImageUrl} 
+                                        alt={`${task.assignee.firstName} ${task.assignee.lastName}`} 
+                                      />
+                                      <AvatarFallback>
+                                        {getInitials(`${task.assignee.firstName} ${task.assignee.lastName}`)}
+                                      </AvatarFallback>
+                                    </Avatar>
+                                  </div>
+                                ) : null}
+                              </div>
                             </div>
-                          </div>
-                        )}
+                          );
+                        }}
                       </Draggable>
                     ))}
                     {provided.placeholder}

@@ -7,10 +7,48 @@
     <meta name="description" content="A comprehensive project management platform with task tracking, document management, team collaboration, and analytics features." />
     <meta property="og:title" content="ProManage - Comprehensive Project Management Platform" />
     <meta property="og:description" content="A comprehensive project management platform with task tracking, document management, team collaboration, and analytics features." />
-    <meta property="og:type" content="website" />
-    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <meta property="og:type" content="website" />    <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Prevent flash of unstyled content by applying theme immediately -->
+    <script>
+      (function() {
+        try {
+          const STORAGE_KEY = "vinasana-appearance-settings";
+          const saved = localStorage.getItem(STORAGE_KEY);
+          const settings = saved ? JSON.parse(saved) : { theme: "system", density: "comfortable" };
+          
+          let effectiveTheme = settings.theme;
+          if (settings.theme === "system") {
+            effectiveTheme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+          }
+          
+          const htmlElement = document.documentElement;
+          
+          if (effectiveTheme === "dark") {
+            htmlElement.classList.add("dark");
+            htmlElement.style.backgroundColor = "hsl(240 10% 3.9%)";
+          } else {
+            htmlElement.classList.remove("dark");
+            htmlElement.style.backgroundColor = "hsl(0 0% 100%)";
+          }
+          
+          htmlElement.classList.remove("density-compact", "density-comfortable", "density-spacious");
+          htmlElement.classList.add("density-" + (settings.density || "comfortable"));
+          
+        } catch (error) {
+          // Fallback to system theme
+          if (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) {
+            document.documentElement.classList.add("dark");
+            document.documentElement.style.backgroundColor = "hsl(240 10% 3.9%)";
+          } else {
+            document.documentElement.style.backgroundColor = "hsl(0 0% 100%)";
+          }
+          document.documentElement.classList.add("density-comfortable");
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

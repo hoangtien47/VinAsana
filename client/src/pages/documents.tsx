@@ -4,6 +4,7 @@ import { Navbar } from "@/components/ui/navbar";
 import { DocumentList } from "@/components/documents/document-list";
 import { DocumentUpload } from "@/components/documents/document-upload";
 import { DocumentViewer } from "@/components/documents/document-viewer";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useQuery } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
@@ -105,22 +106,24 @@ export default function Documents() {
       <Sidebar />
       <div className="flex flex-col flex-1 overflow-hidden">
         <Navbar title="Documents" subtitle={projects?.find((p: any) => p.id === projectId)?.name} />
-        <div className="flex-1 p-6 overflow-auto">
-          {/* Project selector */}
+        <div className="flex-1 p-6 overflow-auto">          {/* Project selector */}
           {projects && projects.length > 1 && (
             <div className="flex items-center space-x-2 mb-4">
-              <span className="text-sm font-medium">Project:</span>
-              <select
-                className="border border-gray-300 rounded-md px-2 py-1 text-sm"
-                value={projectId || ''}
-                onChange={(e) => setProjectId(Number(e.target.value))}
+              <span className="text-sm font-medium">Project:</span>              <Select
+                value={projectId?.toString() || undefined}
+                onValueChange={(value) => setProjectId(Number(value))}
               >
-                {projects.map((project: any) => (
-                  <option key={project.id} value={project.id}>
-                    {project.name}
-                  </option>
-                ))}
-              </select>
+                <SelectTrigger className="w-[250px]">
+                  <SelectValue placeholder="Select a project" />
+                </SelectTrigger>
+                <SelectContent>
+                  {projects.map((project: any) => (
+                    <SelectItem key={project.id} value={project.id.toString()}>
+                      {project.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           )}
 
