@@ -6,6 +6,11 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+// API configuration
+export function getApiBaseUrl(): string {
+  return import.meta.env.VITE_API_BASE_URL || "http://localhost:8080";
+}
+
 export function formatDate(date?: Date | string | null): string {
   if (!date) return "";
   return format(new Date(date), "MMM d, yyyy");
@@ -32,26 +37,33 @@ export function getInitials(name: string): string {
 }
 
 export function getStatusColor(status: string): string {
-  const statusColors: Record<string, string> = {
-    backlog: "bg-gray-400",
-    todo: "bg-blue-400",
-    in_progress: "bg-yellow-400", 
-    review: "bg-purple-400",
-    done: "bg-green-400",
-  };
-  
-  return statusColors[status] || "bg-gray-400";
+  switch (status.toLowerCase()) {
+    case 'todo':
+      return 'bg-gray-400 text-gray-800 border-gray-200';
+    case 'in_progress':
+      return 'bg-blue-400 text-blue-800 border-blue-200';
+    case 'in_review':
+      return 'bg-yellow-400 text-yellow-800 border-yellow-200';
+    case 'done':
+      return 'bg-green-400 text-green-800 border-green-200';
+    default:
+      return 'bg-gray-400 text-gray-800 border-gray-200';
+  }
 }
 
 export function getPriorityColor(priority: string): string {
-  const priorityColors: Record<string, string> = {
-    low: "bg-blue-400",
-    medium: "bg-yellow-400",
-    high: "bg-orange-400",
-    urgent: "bg-red-400",
-  };
-  
-  return priorityColors[priority] || "bg-gray-400";
+  switch (priority.toLowerCase()) {
+    case 'low':
+      return 'bg-green-400 text-green-800 border-green-200';
+    case 'medium':
+      return 'bg-yellow-400 text-yellow-800 border-yellow-200';
+    case 'high':
+      return 'bg-orange-400 text-orange-800 border-orange-200';
+    case 'urgent':
+      return 'bg-red-400 text-red-800 border-red-200';
+    default:
+      return 'bg-gray-400 text-gray-800 border-gray-200';
+  }
 }
 
 export function getRandomColor(): string {

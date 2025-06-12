@@ -12,8 +12,9 @@ import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { useProject, CreateProjectData } from "@/hooks/use-project";
 import { useUser } from "@/hooks/use-user";
-import { useI18n } from "@/hooks/use-i18n";
+import { useI18n, useUserLanguageSync } from "@/hooks/use-i18n";
 import { useAuth0 } from "@auth0/auth0-react";
+import { getApiBaseUrl } from "@/lib/utils";
 import { 
   LayoutDashboard, 
   CheckSquare, 
@@ -26,12 +27,15 @@ import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { ProjectForm } from "@/components/projects/project-form";
 
-export default function Dashboard() {
-  const { user } = useAuth();
+export default function Dashboard() {  const { user } = useAuth();
   const { toast } = useToast();
   const { t } = useI18n();
   const { getAccessTokenSilently, isAuthenticated } = useAuth0();
   const [isProjectFormOpen, setIsProjectFormOpen] = useState(false);
+  const apiBaseUrl = getApiBaseUrl();
+
+  // Sync user language preferences
+  useUserLanguageSync();
   
   const { 
     projects, 
@@ -57,9 +61,8 @@ export default function Dashboard() {
       if (!isAuthenticated) {
         throw new Error("User is not authenticated");
       }
-      
-      const token = await getAccessTokenSilently();
-      const response = await fetch("http://localhost:8080/v1/tasks", {
+        const token = await getAccessTokenSilently();
+      const response = await fetch(`${apiBaseUrl}/v1/tasks`, {
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
@@ -119,11 +122,21 @@ export default function Dashboard() {
   const calculateTaskStats = () => {
     try {
       const tasksToAnalyze = tasks || [];
+
+      // Debug logging
+      console.log('Dashboard - calculateTaskStats:', {
+        totalTasks: tasksToAnalyze.length,
+        sampleTask: tasksToAnalyze[0],
+        tasksWithDueDate: tasksToAnalyze.filter((t: any) => t?.dueDate).length
+      });
+
+      // ...existing code...
       if (tasksToAnalyze.length === 0) {
         return {
           statusDistribution: [],
           priorityDistribution: [],
-          upcomingDeadlines: 0
+          upcomingDeadlines: 0,
+          upcomingDeadlineTasks: []
         };
       }
 
@@ -151,33 +164,83 @@ export default function Dashboard() {
         { name: t('tasks.priority.medium'), value: priorityCounts.medium || 0, color: "#f59e0b" },
         { name: t('tasks.priority.high'), value: priorityCounts.high || 0, color: "#f97316" },
         { name: t('tasks.priority.urgent'), value: priorityCounts.urgent || 0, color: "#ef4444" },
-      ].filter(item => item.value > 0);
-
-      // Calculate upcoming deadlines (tasks due in next 7 days)
+      ].filter(item => item.value > 0);      // Calculate upcoming deadlines (tasks due in next 7 days)
       const now = new Date();
       const nextWeek = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
       
-      const upcomingDeadlines = tasksToAnalyze.filter((task: any) => {
+      console.log('Dashboard - Upcoming deadlines calculation:', {
+        now: now.toISOString(),
+        nextWeek: nextWeek.toISOString(),
+        tasksWithDueDate: tasksToAnalyze.filter((t: any) => t?.dueDate).map((t: any) => ({
+          id: t.id,
+          title: t.title,
+          dueDate: t.dueDate,
+          status: t.status
+        }))
+      });
+          const upcomingDeadlineTasks = tasksToAnalyze.filter((task: any) => {
         try {
           if (!task || !task.dueDate || task.status === 'done') return false;
           const dueDate = new Date(task.dueDate);
-          return dueDate >= now && dueDate <= nextWeek;
+          // Include tasks due in the next 7 days OR overdue tasks (but not done)
+          const isUpcoming = dueDate <= nextWeek;
+          
+          if (task.dueDate) {
+            console.log('Task due date check:', {
+              taskId: task.id,
+              title: task.title,
+              dueDate: task.dueDate,
+              parsedDueDate: dueDate.toISOString(),
+              status: task.status,
+              isUpcoming
+            });
+          }
+          
+          return isUpcoming;
         } catch (error) {
+          console.error('Error processing task due date:', error, task);
           return false;
-        }
-      }).length;
+        }}).map((task: any) => {
+        // Find project info if available
+        const taskProject = projects?.find((p: any) => p.id === task.projectId);
+        // Find user info if available
+        const taskAssignee = users?.find((u: any) => u.id === task.assigneeId);
+        
+        return {
+          ...task,
+          // Add project info
+          project: taskProject ? {
+            id: taskProject.id,
+            name: taskProject.name
+          } : {
+            id: 0,
+            name: "Unknown Project"
+          },
+          // Add assignee info  
+          assignee: taskAssignee ? {
+            id: taskAssignee.id,
+            name: taskAssignee.nickname || taskAssignee.email || "Unknown User",
+            avatar: taskAssignee.avatar
+          } : (task.assigneeId ? {
+            id: task.assigneeId,
+            name: "Unknown User",
+            avatar: undefined
+          } : undefined)
+        };
+      });
 
       return {
         statusDistribution,
         priorityDistribution,
-        upcomingDeadlines
+        upcomingDeadlines: upcomingDeadlineTasks.length,
+        upcomingDeadlineTasks: upcomingDeadlineTasks
       };
     } catch (error) {
-      console.error("Error calculating task statistics:", error);
-      return {
+      console.error("Error calculating task statistics:", error);      return {
         statusDistribution: [],
         priorityDistribution: [],
-        upcomingDeadlines: 0
+        upcomingDeadlines: 0,
+        upcomingDeadlineTasks: []
       };
     }
   };
@@ -258,13 +321,11 @@ export default function Dashboard() {
                   priorityDistribution={taskStats.priorityDistribution}
                 />
               )}
-            </div>
-
-            {/* Upcoming Deadlines & Activity Feed */}
+            </div>            {/* Upcoming Deadlines & Activity Feed */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* <UpcomingDeadlines tasks={stats?.upcomingDeadlines || []} />
-              <ActivityFeed activities={recentActivities} /> */}
-            </div>            {/* Create New Project Button */}
+              <UpcomingDeadlines tasks={taskStats.upcomingDeadlineTasks || []} />
+              {/* <ActivityFeed activities={recentActivities} /> */}
+            </div>{/* Create New Project Button */}
             {/*!isLoadingProjects &&*/ (!projects || projects.length === 0) && (
               <div className="flex justify-center mt-8">                <div className="text-center bg-white dark:bg-gray-800 p-8 rounded-lg shadow-sm w-full max-w-2xl">
                   <Calendar className="h-12 w-12 text-primary mx-auto mb-4" />

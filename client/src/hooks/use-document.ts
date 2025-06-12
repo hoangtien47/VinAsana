@@ -4,6 +4,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth0 } from "@auth0/auth0-react";
+import { getApiBaseUrl } from "@/lib/utils";
 
 // Document structure from API
 export interface Document {
@@ -44,6 +45,7 @@ export function useDocument() {
   const [isUploading, setIsUploading] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const apiBaseUrl = getApiBaseUrl();
 
   // Helper function to make authenticated API requests
   const authFetch = async (url: string, options: RequestInit = {}) => {
@@ -100,8 +102,7 @@ export function useDocument() {
     if (versionId) {
       queryParams.append('versionId', versionId);
     }
-    
-    const url = `http://localhost:8080/v1/s3/presigned-request?${queryParams.toString()}`;
+      const url = `${apiBaseUrl}/v1/s3/presigned-request?${queryParams.toString()}`;
     console.log("Presigned URL request:", url);
     
     const response = await fetch(url, {
@@ -130,9 +131,8 @@ export function useDocument() {
   // Utility function to get presigned URL for upload (keeping the original for uploads)
   const postPresignedUrl = async (key: string, acl: string) => {
     console.log("Requesting presigned URL for:", { key, acl });
-    
-    const token = await getAccessTokenSilently();
-    const url = `http://localhost:8080/v1/s3/presigned-request?key=${encodeURIComponent(key)}&acl=${encodeURIComponent(acl)}`;
+      const token = await getAccessTokenSilently();
+    const url = `${apiBaseUrl}/v1/s3/presigned-request?key=${encodeURIComponent(key)}&acl=${encodeURIComponent(acl)}`;
     console.log("Presigned URL request:", url);
     
     const response = await fetch(url, {
@@ -236,12 +236,10 @@ export function useDocument() {
         contentType: contentType,
         acl: acl,
         description: description,
-      };
-
-      console.log("Saving document metadata:", documentData);
+      };      console.log("Saving document metadata:", documentData);
 
       const token = await getAccessTokenSilently();
-      const saveResponse = await fetch(`http://localhost:8080/v1/files`, {
+      const saveResponse = await fetch(`${apiBaseUrl}/v1/files`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,
@@ -351,12 +349,10 @@ export function useDocument() {
         contentType: contentType,
         acl: acl,
         description: description,
-      };
-
-      console.log("Updating document metadata:", documentData);
+      };      console.log("Updating document metadata:", documentData);
 
       const token = await getAccessTokenSilently();
-      const saveResponse = await fetch(`http://localhost:8080/v1/files`, {
+      const saveResponse = await fetch(`${apiBaseUrl}/v1/files`, {
         method: "POST", // Still use POST as it will create a new version
         headers: {
           Authorization: `Bearer ${token}`,
@@ -454,9 +450,7 @@ export function useDocument() {
         if (key !== 'page' && key !== 'size' && key !== 'sort' && filters[key] !== undefined && filters[key] !== null) {
           queryParams.append(key, filters[key].toString());
         }
-      });
-
-      const url = `http://localhost:8080/v1/files${queryParams.toString() ? '?' + queryParams.toString() : ''}`;
+      });      const url = `${apiBaseUrl}/v1/files${queryParams.toString() ? '?' + queryParams.toString() : ''}`;
       console.log("Fetching documents from:", url);
       
       return await authFetch(url);
@@ -467,10 +461,9 @@ export function useDocument() {
   };
 
   // Update document
-  const updateDocument = async (documentId: number, updateData: Partial<Document>) => {
-    setIsUpdating(true);
+  const updateDocument = async (documentId: number, updateData: Partial<Document>) => {    setIsUpdating(true);
     try {
-      const url = `http://localhost:8080/v1/files/${documentId}`;
+      const url = `${apiBaseUrl}/v1/files/${documentId}`;
       const result = await authFetch(url, {
         method: 'PATCH',
         body: JSON.stringify(updateData),
@@ -494,14 +487,13 @@ export function useDocument() {
       });
       throw error;
     } finally {
-      setIsUpdating(false);
-    }
+      setIsUpdating(false);    }
   };
 
   // Delete document
   const deleteDocument = async (documentId: number) => {
     try {
-      const url = `http://localhost:8080/v1/files/${documentId}`;
+      const url = `${apiBaseUrl}/v1/files/${documentId}`;
       await authFetch(url, {
         method: 'DELETE',
       });
@@ -520,24 +512,23 @@ export function useDocument() {
         description: error instanceof Error ? error.message : "Failed to delete document", 
         variant: "destructive",
       });
-      throw error;
-    }
+      throw error;    }
   };
+  
   // Get single document by ID
   const getDocumentById = async (documentId: number) => {
     try {
-      const url = `http://localhost:8080/v1/files/${documentId}`;
+      const url = `${apiBaseUrl}/v1/files/${documentId}`;
       return await authFetch(url);
     } catch (error) {
       console.error("Failed to fetch document:", error);
       throw error;
-    }
-  };
+    }  };
 
   // Get document versions by key
   const getDocumentVersions = async (key: string): Promise<DocumentVersion[]> => {
     try {
-      const url = `http://localhost:8080/v1/files/versions?key=${encodeURIComponent(key)}`;
+      const url = `${apiBaseUrl}/v1/files/versions?key=${encodeURIComponent(key)}`;
       console.log("Fetching document versions from:", url);
       return await authFetch(url);
     } catch (error) {
@@ -545,6 +536,7 @@ export function useDocument() {
       throw error;
     }
   };
+  
   // Helper function to get preview URL for a document
   const getDocumentPreviewUrl = async (key: string, versionId?: string) => {
     return await getPresignedUrl(key, 'inline', versionId);

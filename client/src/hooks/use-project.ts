@@ -3,7 +3,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth0 } from "@auth0/auth0-react";
-import { fromApiTimestamp } from "@/lib/utils";
+import { fromApiTimestamp, getApiBaseUrl } from "@/lib/utils";
 
 // Project structure from API
 export interface Project {
@@ -44,6 +44,8 @@ export interface UpdateProjectData {
 export function useProject() {
   const { toast } = useToast();
   const { getAccessTokenSilently, isAuthenticated } = useAuth0();
+  const apiBaseUrl = getApiBaseUrl();
+  
   // Helper function to transform API project to frontend project (convert 10-digit timestamps to 13-digit)
   const transformProject = (apiProject: Project): Project => {
     return {
@@ -84,20 +86,18 @@ export function useProject() {
     data: projectsData,
     isLoading,
     error,
-    refetch,
-  } = useQuery<ProjectsResponse>({
+    refetch,  } = useQuery<ProjectsResponse>({
     queryKey: ["projects"],
-    queryFn: () => authFetch("http://localhost:8080/v1/projects"),
+    queryFn: () => authFetch(`${apiBaseUrl}/v1/projects`),
     enabled: isAuthenticated,
   });
   // Extract projects from paginated response and transform timestamps
   const projects = projectsData?.items?.map(transformProject) || [];
   // Create a new project
   const createProjectMutation = useMutation({
-    mutationFn: async (projectData: CreateProjectData) => {
-      console.log("Creating project with data:", projectData);
+    mutationFn: async (projectData: CreateProjectData) => {      console.log("Creating project with data:", projectData);
       
-      const response = await fetch("http://localhost:8080/v1/projects", {
+      const response = await fetch(`${apiBaseUrl}/v1/projects`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${await getAccessTokenSilently()}`,
@@ -137,10 +137,9 @@ export function useProject() {
       projectId,
       projectData,
     }: {
-      projectId: string;
-      projectData: UpdateProjectData;
+      projectId: string;      projectData: UpdateProjectData;
     }) => {
-      const response = await fetch(`http://localhost:8080/v1/projects/${projectId}`, {
+      const response = await fetch(`${apiBaseUrl}/v1/projects/${projectId}`, {
         method: "PUT",
         headers: {
           Authorization: `Bearer ${await getAccessTokenSilently()}`,
@@ -172,13 +171,13 @@ export function useProject() {
         title: "Error",
         description: `Failed to update project: ${error.message}`,
         variant: "destructive",
-      });
-    },
+      });    },
   });
+  
   // Delete a project
   const deleteProjectMutation = useMutation({
     mutationFn: async (projectId: string) => {
-      const response = await fetch(`http://localhost:8080/v1/projects/${projectId}`, {
+      const response = await fetch(`${apiBaseUrl}/v1/projects/${projectId}`, {
         method: "DELETE",
         headers: {
           Authorization: `Bearer ${await getAccessTokenSilently()}`,
@@ -209,13 +208,13 @@ export function useProject() {
         title: "Error",
         description: `Failed to delete project: ${error.message}`,
         variant: "destructive",
-      });
-    },
+      });    },
   });
+  
   // Get a single project by ID
   const getProject = async (projectId: string) => {
     try {
-      const apiProject = await authFetch(`http://localhost:8080/v1/projects/${projectId}`);
+      const apiProject = await authFetch(`${apiBaseUrl}/v1/projects/${projectId}`);
       return transformProject(apiProject);
     } catch (error) {
       console.error("Failed to fetch project:", error);

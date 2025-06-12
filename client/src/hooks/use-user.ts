@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth0 } from "@auth0/auth0-react";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useMemo } from "react";
+import { getApiBaseUrl } from "@/lib/utils";
 
 // Define permission structure
 export interface Permission {
@@ -78,6 +79,7 @@ export function useUser() {
   const { getAccessTokenSilently, isAuthenticated } = useAuth0();
   const queryClient = useQueryClient();
   const [filters, setFilters] = useState<UserFilterOptions>({});
+  const apiBaseUrl = getApiBaseUrl();
 
   // Helper function to make authenticated API requests
   const authFetch = async (url: string, options: RequestInit = {}) => {
@@ -119,10 +121,9 @@ export function useUser() {
     error,
     refetch,
   } = useQuery<UsersResponse>({
-    queryKey: ["users", filters],
-    queryFn: () => {
+    queryKey: ["users", filters],    queryFn: () => {
       console.log("Fetching users from API");
-      return authFetch("http://localhost:8080/v1/users");
+      return authFetch(`${apiBaseUrl}/v1/users`);
     },
     enabled: isAuthenticated,
   });
@@ -132,10 +133,9 @@ export function useUser() {
     data: userProfile,
     isLoading: isLoadingProfile,
     error: profileError,
-    refetch: refetchProfile,
-  } = useQuery<UserProfile>({
+    refetch: refetchProfile,  } = useQuery<UserProfile>({
     queryKey: ["user-profile"],
-    queryFn: () => authFetch("http://localhost:8080/v1/users/profile"),
+    queryFn: () => authFetch(`${apiBaseUrl}/v1/users/profile`),
     enabled: isAuthenticated,
   });
 
@@ -143,10 +143,9 @@ export function useUser() {
   const {
     data: permissions,
     isLoading: isLoadingPermissions,
-    error: permissionsError,
-  } = useQuery<Permission[]>({
+    error: permissionsError,  } = useQuery<Permission[]>({
     queryKey: ["permissions"],
-    queryFn: () => authFetch("http://localhost:8080/v1/users/permissions"),
+    queryFn: () => authFetch(`${apiBaseUrl}/v1/users/permissions`),
     enabled: isAuthenticated,
   });
 
@@ -196,10 +195,9 @@ export function useUser() {
   };
 
   // Create user mutation
-  const createUserMutation = useMutation({
-    mutationFn: async (userData: CreateUserData) => {
+  const createUserMutation = useMutation({    mutationFn: async (userData: CreateUserData) => {
       console.log("Creating user with data:", userData);
-      return authFetch("http://localhost:8080/v1/users", {
+      return authFetch(`${apiBaseUrl}/v1/users`, {
         method: "POST",
         body: JSON.stringify(userData),
       });
@@ -221,9 +219,8 @@ export function useUser() {
   });
 
   // Update user mutation
-  const updateUserMutation = useMutation({
-    mutationFn: async ({ userId, userData }: { userId: string; userData: UpdateUserData }) => {
-      return authFetch(`http://localhost:8080/v1/users/${userId}`, {
+  const updateUserMutation = useMutation({    mutationFn: async ({ userId, userData }: { userId: string; userData: UpdateUserData }) => {
+      return authFetch(`${apiBaseUrl}/v1/users/${userId}`, {
         method: "PUT",
         body: JSON.stringify(userData),
       });
@@ -245,9 +242,8 @@ export function useUser() {
   });
 
   // Delete user mutation
-  const deleteUserMutation = useMutation({
-    mutationFn: async (userId: string) => {
-      return authFetch(`http://localhost:8080/v1/users/${userId}`, {
+  const deleteUserMutation = useMutation({    mutationFn: async (userId: string) => {
+      return authFetch(`${apiBaseUrl}/v1/users/${userId}`, {
         method: "DELETE",
       });
     },
@@ -268,9 +264,8 @@ export function useUser() {
   });
 
   // Update profile mutation
-  const updateProfileMutation = useMutation({
-    mutationFn: async (profileData: UpdateProfileData) => {
-      return authFetch("http://localhost:8080/v1/users/profile", {
+  const updateProfileMutation = useMutation({    mutationFn: async (profileData: UpdateProfileData) => {
+      return authFetch(`${apiBaseUrl}/v1/users/profile`, {
         method: "PUT",
         body: JSON.stringify(profileData),
       });
@@ -292,9 +287,8 @@ export function useUser() {
   });
 
   // Update password mutation
-  const updatePasswordMutation = useMutation({
-    mutationFn: async (passwordData: UpdatePasswordData) => {
-      return authFetch("http://localhost:8080/v1/users/password", {
+  const updatePasswordMutation = useMutation({    mutationFn: async (passwordData: UpdatePasswordData) => {
+      return authFetch(`${apiBaseUrl}/v1/users/password`, {
         method: "PUT",
         body: JSON.stringify(passwordData),
       });
@@ -315,10 +309,9 @@ export function useUser() {
   });  
   
   // First-time password reset mutation (using token)
-  const firstTimePasswordMutation = useMutation({
-    mutationFn: async (data: FirstTimePasswordData) => {
+  const firstTimePasswordMutation = useMutation({    mutationFn: async (data: FirstTimePasswordData) => {
       // For first-time password reset, we don't need authentication
-      const response = await fetch(`http://localhost:8080/v1/user-action/reset/${data.token}`, {
+      const response = await fetch(`${apiBaseUrl}/v1/user-action/reset/${data.token}`, {
         method: "POST",
         headers: {
           'Content-Type': 'application/json',
@@ -358,11 +351,10 @@ export function useUser() {
   });
 
 
-
   // Get user by ID
   const getUser = async (userId: string): Promise<ApiUser | null> => {
     try {
-      const user: ApiUser | null = await authFetch(`http://localhost:8080/v1/users/${userId}`);
+      const user: ApiUser | null = await authFetch(`${apiBaseUrl}/v1/users/${userId}`);
       return user;
     } catch (error) {
       console.error("Failed to fetch user:", error);

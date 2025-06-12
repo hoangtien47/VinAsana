@@ -36,12 +36,11 @@ export function UpcomingDeadlines({ tasks }: UpcomingDeadlinesProps) {
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
     return diffDays;
   };
-
   // Helper to determine the badge color based on days remaining
   const getDeadlineBadgeVariant = (daysRemaining: number) => {
     if (daysRemaining < 0) return "destructive";
     if (daysRemaining === 0) return "destructive";
-    if (daysRemaining <= 2) return "warning";
+    if (daysRemaining <= 2) return "outline"; // Changed from "warning" to "outline"
     return "secondary";
   };
 

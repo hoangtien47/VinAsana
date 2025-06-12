@@ -3,7 +3,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth0 } from "@auth0/auth0-react";
-import { toApiTimestamp, fromApiTimestamp, getCurrentApiTimestamp, addSecondsToCurrentTime } from "@/lib/utils";
+import { toApiTimestamp, fromApiTimestamp, getCurrentApiTimestamp, addSecondsToCurrentTime, getApiBaseUrl } from "@/lib/utils";
 
 // Define the comment structure for tasks
 export interface Comment {
@@ -73,6 +73,7 @@ export function useTask() {
   const { toast } = useToast();
   const { getAccessTokenSilently, isAuthenticated } = useAuth0();
   const [projectId, setProjectId] = useState<string | null>(null);
+  const apiBaseUrl = getApiBaseUrl();
 
   // Helper function to transform API task to frontend task
   const transformTask = (apiTask: ApiTask): Task => {    // Map API status to component status
@@ -157,10 +158,9 @@ export function useTask() {
     // For non-JSON responses or empty responses, return null
     return null;
   };
-
   // Helper function to build filter URL
   const buildTasksUrl = (filters?: { projectId?: string; status?: string; priority?: string; assigneeId?: string }) => {
-    const baseUrl = "http://localhost:8080/v1/tasks";
+    const baseUrl = `${apiBaseUrl}/v1/tasks`;
     
     if (!filters || Object.keys(filters).length === 0) {
       return baseUrl;
@@ -239,9 +239,8 @@ export function useTask() {
     });
   };
   // Create a new task
-  const createTaskMutation = useMutation({
-    mutationFn: async (taskData: CreateTaskData) => {
-      const response = await fetch("http://localhost:8080/v1/tasks", {
+  const createTaskMutation = useMutation({    mutationFn: async (taskData: CreateTaskData) => {
+      const response = await fetch(`${apiBaseUrl}/v1/tasks`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${await getAccessTokenSilently()}`,
@@ -282,10 +281,9 @@ export function useTask() {
       taskId,
       taskData,
     }: {
-      taskId: string;
-      taskData: Partial<CreateTaskData>;
+      taskId: string;      taskData: Partial<CreateTaskData>;
     }) => {
-      const response = await fetch(`http://localhost:8080/v1/tasks/${taskId}`, {
+      const response = await fetch(`${apiBaseUrl}/v1/tasks/${taskId}`, {
         method: "PUT",
         headers: {
           Authorization: `Bearer ${await getAccessTokenSilently()}`,
@@ -321,9 +319,8 @@ export function useTask() {
     },
   });
   // Delete a task
-  const deleteTaskMutation = useMutation({
-    mutationFn: async (taskId: string) => {
-      const response = await fetch(`http://localhost:8080/v1/tasks/${taskId}`, {
+  const deleteTaskMutation = useMutation({    mutationFn: async (taskId: string) => {
+      const response = await fetch(`${apiBaseUrl}/v1/tasks/${taskId}`, {
         method: "DELETE",
         headers: {
           Authorization: `Bearer ${await getAccessTokenSilently()}`,
@@ -358,10 +355,9 @@ export function useTask() {
     },
   });
   // Get a single task by ID - using mutation for manual control
-  const getTaskByIdMutation = useMutation({
-    mutationFn: async (taskId: string) => {
+  const getTaskByIdMutation = useMutation({    mutationFn: async (taskId: string) => {
       try {
-        return await authFetch(`http://localhost:8080/v1/tasks/${taskId}`);
+        return await authFetch(`${apiBaseUrl}/v1/tasks/${taskId}`);
       } catch (error) {
         console.error("Failed to fetch task:", error);
         throw error;
@@ -372,10 +368,12 @@ export function useTask() {
   // Helper function for getting task by ID
   const getTaskById = async (taskId: string) => {
     return getTaskByIdMutation.mutateAsync(taskId);
-  };// Add a comment to a task - using mutation for proper cache invalidation
+  };
+
+  // Add a comment to a task - using mutation for proper cache invalidation
   const addCommentMutation = useMutation({
     mutationFn: async ({ taskId, content, userId }: { taskId: string; content: string; userId: string }) => {
-      return await authFetch(`http://localhost:8080/v1/comments`, {
+      return await authFetch(`${apiBaseUrl}/v1/comments`, {
         method: "POST",
         body: JSON.stringify({ content, userId, taskId }),
       });
@@ -390,12 +388,12 @@ export function useTask() {
     },
     onError: (error: Error) => {
       console.error("Failed to add comment:", error);
-      throw error;
-    }
-  });  // Update a comment - using mutation for proper cache invalidation
-  const updateCommentMutation = useMutation({
-    mutationFn: async ({ commentId, content, userId, taskId }: { commentId: string; content: string; userId: string; taskId: string }) => {
-      return await authFetch(`http://localhost:8080/v1/comments/${commentId}`, {
+      throw error;    }
+  });
+
+  // Update a comment - using mutation for proper cache invalidation
+  const updateCommentMutation = useMutation({    mutationFn: async ({ commentId, content, userId, taskId }: { commentId: string; content: string; userId: string; taskId: string }) => {
+      return await authFetch(`${apiBaseUrl}/v1/comments/${commentId}`, {
         method: "PUT",
         body: JSON.stringify({ content, userId, taskId }),
       });
@@ -410,12 +408,12 @@ export function useTask() {
     },
     onError: (error: Error) => {
       console.error("Failed to update comment:", error);
-      throw error;
-    }
-  });  // Delete a comment - using mutation for proper cache invalidation
-  const deleteCommentMutation = useMutation({
-    mutationFn: async ({ commentId, taskId }: { commentId: string; taskId: string }) => {
-      return await authFetch(`http://localhost:8080/v1/comments/${commentId}`, {
+      throw error;    }
+  });
+
+  // Delete a comment - using mutation for proper cache invalidation
+  const deleteCommentMutation = useMutation({    mutationFn: async ({ commentId, taskId }: { commentId: string; taskId: string }) => {
+      return await authFetch(`${apiBaseUrl}/v1/comments/${commentId}`, {
         method: "DELETE",
       });
     },

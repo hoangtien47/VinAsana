@@ -11,23 +11,11 @@ interface I18nContextType {
 const I18nContext = createContext<I18nContextType | undefined>(undefined);
 
 export function I18nProvider({ children }: { children: React.ReactNode }) {
-  const { userProfile } = useUser();
   const [currentLanguage, setCurrentLanguage] = useState<LanguageCode>(() => {
-    // Try to get language from localStorage as fallback
+    // Get language from localStorage as the primary source
     const saved = localStorage.getItem('vinasana-language');
     return (saved as LanguageCode) || 'en';
   });
-
-  // Update language when user profile changes
-  useEffect(() => {
-    if (userProfile?.languageCode) {
-      const langCode = userProfile.languageCode as LanguageCode;
-      if (translations[langCode]) {
-        setCurrentLanguage(langCode);
-        localStorage.setItem('vinasana-language', langCode);
-      }
-    }
-  }, [userProfile?.languageCode]);
 
   // Translation function
   const t = (key: string, params?: Record<string, string>) => {
@@ -55,4 +43,19 @@ export function useI18n() {
     throw new Error('useI18n must be used within an I18nProvider');
   }
   return context;
+}
+
+// Separate hook to sync user language preferences (to be used in components)
+export function useUserLanguageSync() {
+  const { changeLanguage } = useI18n();
+  const { userProfile } = useUser();
+
+  useEffect(() => {
+    if (userProfile?.languageCode) {
+      const langCode = userProfile.languageCode as LanguageCode;
+      if (translations[langCode]) {
+        changeLanguage(langCode);
+      }
+    }
+  }, [userProfile?.languageCode, changeLanguage]);
 }
