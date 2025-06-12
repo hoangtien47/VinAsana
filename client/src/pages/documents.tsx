@@ -1,53 +1,37 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Sidebar } from "@/components/ui/sidebar";
 import { Navbar } from "@/components/ui/navbar";
 import { DocumentList } from "@/components/documents/document-list";
 import { DocumentUpload } from "@/components/documents/document-upload";
 import { DocumentViewer } from "@/components/documents/document-viewer";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useQuery } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { Loader2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { useDocument } from "@/hooks/use-document";
+import { useDocument, DocumentFilters } from "@/hooks/use-document";
 
 export default function Documents() {
   const { user } = useAuth();
   const { toast } = useToast();
-  const [projectId, setProjectId] = useState<number | null>(null);
   const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false);
   const [isViewerOpen, setIsViewerOpen] = useState(false);
   const [selectedDocument, setSelectedDocument] = useState<any | null>(null);
   const [isEditMode, setIsEditMode] = useState(false);
-
-  // Get the first project ID for now, in a real application you'd want to get this from the URL
-  const {
-    data: projects,
-    isLoading: isLoadingProjects,
-    error: projectsError,
-  } = useQuery({
-    queryKey: ['/api/projects'],
-    enabled: !!user,
+  const [filters, setFilters] = useState<DocumentFilters>({
+    page: 0,
+    size: 10,
+    sort: "id,desc"
   });
 
-  // Set the first project as active when projects load
-  useEffect(() => {
-    if (projects && projects.length > 0 && !projectId) {
-      setProjectId(projects[0].id);
-    }
-  }, [projects, projectId]);
-
-  // Fetch documents for the active project
-  const {
-    data: documents,
-    isLoading: isLoadingDocuments,
+  // Use the document hook with filters
+  const { useDocuments } = useDocument();
+  const { 
+    data: documents, 
+    isLoading: isLoadingDocuments, 
     error: documentsError,
-    refetch: refetchDocuments,
-  } = useQuery({
-    queryKey: [`/api/projects/${projectId}/documents`],
-    enabled: !!projectId,
-  });
+    refetch: refetchDocuments 
+  } = useDocuments(filters);
+
+  console.log("Documents:", documents);
 
   const handleUploadClick = () => {
     setSelectedDocument(null);
@@ -67,12 +51,16 @@ export default function Documents() {
     setIsUploadDialogOpen(true);
   };
 
-  const handleDocumentUploaded = () => {
+  const handleDocumentsChange = () => {
     refetchDocuments();
   };
 
+  // Handle filter changes
+  const handleFilterChange = (newFilters: Partial<DocumentFilters>) => {
+    setFilters(prev => ({ ...prev, ...newFilters }));
+  };
   // Loading state
-  if (isLoadingProjects) {
+  if (isLoadingDocuments) {
     return (
       <div className="flex h-screen items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -80,22 +68,18 @@ export default function Documents() {
     );
   }
 
-  // No projects state
-  if (projects && projects.length === 0) {
+  // Error state
+  if (documentsError) {
     return (
-      <div className="flex h-screen overflow-hidden bg-gray-50 dark:bg-gray-900">
-        <Sidebar />
-        <div className="flex flex-col flex-1 overflow-hidden">
-          <Navbar title="Documents" />
-          <div className="flex-1 p-6 flex items-center justify-center">
-            <div className="text-center bg-white dark:bg-gray-800 p-8 rounded-lg shadow-sm w-full max-w-md">
-              <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">No Projects Found</h2>
-              <p className="mt-2 text-gray-600 dark:text-gray-400">
-                Create your first project to start managing documents.
-              </p>
-              <Button className="mt-4">Create Project</Button>
-            </div>
-          </div>
+      <div className="flex h-screen items-center justify-center">
+        <div className="text-center">
+          <p className="text-red-500 mb-2">Failed to load documents</p>
+          <button 
+            onClick={() => refetchDocuments()} 
+            className="text-blue-500 underline"
+          >
+            Try again
+          </button>
         </div>
       </div>
     );
@@ -105,50 +89,24 @@ export default function Documents() {
     <div className="flex h-screen overflow-hidden bg-gray-50 dark:bg-gray-900">
       <Sidebar />
       <div className="flex flex-col flex-1 overflow-hidden">
-        <Navbar title="Documents" subtitle={projects?.find((p: any) => p.id === projectId)?.name} />
-        <div className="flex-1 p-6 overflow-auto">          {/* Project selector */}
-          {projects && projects.length > 1 && (
-            <div className="flex items-center space-x-2 mb-4">
-              <span className="text-sm font-medium">Project:</span>              <Select
-                value={projectId?.toString() || undefined}
-                onValueChange={(value) => setProjectId(Number(value))}
-              >
-                <SelectTrigger className="w-[250px]">
-                  <SelectValue placeholder="Select a project" />
-                </SelectTrigger>
-                <SelectContent>
-                  {projects.map((project: any) => (
-                    <SelectItem key={project.id} value={project.id.toString()}>
-                      {project.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
-
+        <Navbar title="Documents" subtitle="All App Documents" />
+        <div className="flex-1 p-6 overflow-auto">
           {/* Document list */}
-          {isLoadingDocuments ? (
-            <div className="flex items-center justify-center h-64">
-              <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            </div>
-          ) : (
-            <DocumentList
-              documents={documents || []}
-              projectId={projectId!}
-              onViewDocument={handleViewDocument}
-              onEditDocument={handleEditDocument}
-              onUploadDocument={handleUploadClick}
-              onDocumentsChange={refetchDocuments}
-            />
-          )}
+          <DocumentList
+            documents={documents.items || []}
+            onViewDocument={handleViewDocument}
+            onEditDocument={handleEditDocument}
+            onUploadDocument={handleUploadClick}
+            onDocumentsChange={handleDocumentsChange}
+            onFilterChange={handleFilterChange}
+            filters={filters}
+          />
 
           {/* Document upload dialog */}
           <DocumentUpload
             open={isUploadDialogOpen}
             onClose={() => setIsUploadDialogOpen(false)}
-            onDocumentUploaded={handleDocumentUploaded}
-            projectId={projectId!}
+            onDocumentUploaded={handleDocumentsChange}
             editDocument={isEditMode ? selectedDocument : undefined}
             isEditMode={isEditMode}
           />

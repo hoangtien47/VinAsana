@@ -3,6 +3,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth0 } from "@auth0/auth0-react";
+import { fromApiTimestamp } from "@/lib/utils";
 
 // Project structure from API
 export interface Project {
@@ -43,6 +44,14 @@ export interface UpdateProjectData {
 export function useProject() {
   const { toast } = useToast();
   const { getAccessTokenSilently, isAuthenticated } = useAuth0();
+  // Helper function to transform API project to frontend project (convert 10-digit timestamps to 13-digit)
+  const transformProject = (apiProject: Project): Project => {
+    return {
+      ...apiProject,
+      startDate: fromApiTimestamp(apiProject.startDate)?.getTime() || apiProject.startDate,
+      endDate: fromApiTimestamp(apiProject.endDate)?.getTime() || apiProject.endDate,
+    };
+  };
 
   // Helper function to make authenticated API requests
   const authFetch = async (url: string, options: RequestInit = {}) => {
@@ -81,9 +90,8 @@ export function useProject() {
     queryFn: () => authFetch("http://localhost:8080/v1/projects"),
     enabled: isAuthenticated,
   });
-
-  // Extract projects from paginated response
-  const projects = projectsData?.items || [];
+  // Extract projects from paginated response and transform timestamps
+  const projects = projectsData?.items?.map(transformProject) || [];
   // Create a new project
   const createProjectMutation = useMutation({
     mutationFn: async (projectData: CreateProjectData) => {
@@ -108,13 +116,13 @@ export function useProject() {
       // For CREATE requests, handle empty responses
       const text = await response.text();
       return text ? JSON.parse(text) : {};
-    },
-    onSuccess: () => {
+    },    onSuccess: () => {
       toast({
         title: "Success",
         description: "Project created successfully",
       });
       queryClient.invalidateQueries({ queryKey: ["projects"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard-all-tasks"] });
     },
     onError: (error: Error) => {
       toast({
@@ -151,13 +159,13 @@ export function useProject() {
       // For UPDATE requests, handle empty responses
       const text = await response.text();
       return text ? JSON.parse(text) : {};
-    },
-    onSuccess: () => {
+    },    onSuccess: () => {
       toast({
         title: "Success",
         description: "Project updated successfully",
       });
       queryClient.invalidateQueries({ queryKey: ["projects"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard-all-tasks"] });
     },
     onError: (error: Error) => {
       toast({
@@ -188,13 +196,13 @@ export function useProject() {
       // For DELETE requests, we don't need to parse JSON if the response is empty
       const text = await response.text();
       return text ? JSON.parse(text) : {};
-    },
-    onSuccess: () => {
+    },    onSuccess: () => {
       toast({
         title: "Success",
         description: "Project deleted successfully",
       });
       queryClient.invalidateQueries({ queryKey: ["projects"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard-all-tasks"] });
     },
     onError: (error: Error) => {
       toast({
@@ -204,11 +212,11 @@ export function useProject() {
       });
     },
   });
-
   // Get a single project by ID
   const getProject = async (projectId: string) => {
     try {
-      return await authFetch(`http://localhost:8080/v1/projects/${projectId}`);
+      const apiProject = await authFetch(`http://localhost:8080/v1/projects/${projectId}`);
+      return transformProject(apiProject);
     } catch (error) {
       console.error("Failed to fetch project:", error);
       throw error;

@@ -11,6 +11,7 @@ import Documents from "@/pages/documents";
 import Team from "@/pages/team";
 import Analytics from "@/pages/analytics";
 import Settings from "@/pages/settings";
+import ResetPassword from "@/pages/reset-password";
 import Landing from "@/pages/landing";
 import { useAuth } from "@/hooks/use-auth";
 import { useAppearance } from "@/hooks/use-appearance";
@@ -53,16 +54,14 @@ function AuthenticatedRouter() {
   }
   
   return (
-    <Switch>
-      {/* Public routes - only accessible if not logged in */}
+    <Switch>      {/* Public routes - only accessible if not logged in */}
       {!user ? (
         <>
           <Route path="/" component={Landing} />
           <Route path="/landing" component={Landing} />
+          <Route path="/reset-password/:token" component={ResetPassword} />
         </>
-      ) : null}
-      
-      {/* Protected routes */}
+      ) : null}{/* Protected routes */}
       {user ? (
         <>
           <Route path="/" component={Dashboard} />
@@ -73,6 +72,8 @@ function AuthenticatedRouter() {
           <Route path="/team" component={Team} />
           <Route path="/analytics" component={Analytics} />
           <Route path="/settings" component={Settings} />
+          <Route path="/reset-password" component={ResetPassword} />
+          <Route path="/reset-password/:token" component={ResetPassword} />
         </>
       ) : null}
       

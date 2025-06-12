@@ -61,6 +61,11 @@ export interface UpdatePasswordData {
   newPassword: string;
 }
 
+export interface FirstTimePasswordData {
+  token: string;
+  password: string;
+}
+
 // Define filter options for users
 export interface UserFilterOptions {
   search?: string;
@@ -307,7 +312,52 @@ export function useUser() {
         variant: "destructive",
       });
     },
+  });  
+  
+  // First-time password reset mutation (using token)
+  const firstTimePasswordMutation = useMutation({
+    mutationFn: async (data: FirstTimePasswordData) => {
+      // For first-time password reset, we don't need authentication
+      const response = await fetch(`http://localhost:8080/v1/user-action/reset/${data.token}`, {
+        method: "POST",
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ password: data.password }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(
+          errorData.message || `Request failed with status ${response.status}`
+        );
+      }
+
+      // Check if response has content before parsing JSON
+      const contentType = response.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        const text = await response.text();
+        return text ? JSON.parse(text) : null;
+      }
+      
+      return null;
+    },
+    onSuccess: () => {
+      toast({
+        title: "Success",
+        description: "Password set successfully",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to set password",
+        variant: "destructive",
+      });
+    },
   });
+
+
 
   // Get user by ID
   const getUser = async (userId: string): Promise<ApiUser | null> => {
@@ -350,13 +400,13 @@ export function useUser() {
         (filters[key as keyof UserFilterOptions] as string[]).length > 0 : 
         true)
     ),
-    
-    // Mutations
+      // Mutations
     createUser: createUserMutation.mutate,
     updateUser: updateUserMutation.mutate,
     deleteUser: deleteUserMutation.mutate,
     updateProfile: updateProfileMutation.mutate,
     updatePassword: updatePasswordMutation.mutate,
+    setFirstTimePassword: firstTimePasswordMutation.mutate,
     
     // Mutation states
     isCreatingUser: createUserMutation.isPending,
@@ -364,6 +414,7 @@ export function useUser() {
     isDeletingUser: deleteUserMutation.isPending,
     isUpdatingProfile: updateProfileMutation.isPending,
     isUpdatingPassword: updatePasswordMutation.isPending,
+    isSettingFirstTimePassword: firstTimePasswordMutation.isPending,
     
     getUser,
   };

@@ -3,7 +3,7 @@ import { DragDropContext, Droppable, Draggable } from "react-beautiful-dnd";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { formatDate, getInitials, getPriorityColor } from "@/lib/utils";
+import { formatDate, getInitials, getPriorityColor, getCurrentApiTimestamp } from "@/lib/utils";
 import { Plus, AlertCircle, Clock } from "lucide-react";
 import { Task, useTask } from "@/hooks/use-task";
 
@@ -131,16 +131,14 @@ export function KanbanBoard({
           "medium": "MEDIUM",
           "high": "HIGH",
           "urgent": "CRITICAL"
-        };
-
-        // Create complete task data for API that matches working edit form structure
+        };        // Create complete task data for API that matches working edit form structure
         const updatedTaskData = {
-          name: draggedTask.title,
+                    name: draggedTask.title,
           description: draggedTask.description || "",
           status: (statusMap[destination.droppableId] || "TODO") as "TODO" | "IN_PROGRESS" | "IN_REVIEW" | "DONE",
           priority: (priorityMap[draggedTask.priority] || "MEDIUM") as "LOW" | "MEDIUM" | "HIGH" | "CRITICAL",
-          startDate: draggedTask.createdAt ? new Date(draggedTask.createdAt).getTime() : Date.now(),
-          endDate: draggedTask.dueDate ? new Date(draggedTask.dueDate).getTime() : Date.now() + 7 * 24 * 60 * 60 * 1000,
+          startDate: draggedTask.createdAt ? Math.floor(new Date(draggedTask.createdAt).getTime() / 1000) : getCurrentApiTimestamp(),
+          endDate: draggedTask.dueDate ? Math.floor(new Date(draggedTask.dueDate).getTime() / 1000) : getCurrentApiTimestamp() + 7 * 24 * 60 * 60,
           assigneeId: draggedTask.assigneeId || "",
           projectId: projectId.toString()
         };

@@ -74,3 +74,66 @@ export function truncateText(text: string, maxLength: number): string {
   if (text.length <= maxLength) return text;
   return text.substring(0, maxLength) + "...";
 }
+
+// Timestamp utility functions for API compatibility
+// Backend expects 10-digit Unix timestamps (seconds), frontend uses 13-digit timestamps (milliseconds)
+
+/**
+ * Convert a Date object or ISO string to 10-digit Unix timestamp (seconds) for API calls
+ * @param date Date object, ISO string, or null/undefined
+ * @returns 10-digit Unix timestamp in seconds, or null if input is invalid
+ */
+export function toApiTimestamp(date: Date | string | null | undefined): number | null {
+  if (!date) return null;
+  
+  try {
+    const dateObj = date instanceof Date ? date : new Date(date);
+    if (isNaN(dateObj.getTime())) return null;
+    return Math.floor(dateObj.getTime() / 1000);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Convert current time to 10-digit Unix timestamp (seconds) for API calls
+ * @returns 10-digit Unix timestamp in seconds
+ */
+export function getCurrentApiTimestamp(): number {
+  return Math.floor(Date.now() / 1000);
+}
+
+/**
+ * Convert 10-digit Unix timestamp (seconds) from API to Date object for frontend use
+ * @param timestamp 10-digit Unix timestamp in seconds
+ * @returns Date object or null if timestamp is invalid
+ */
+export function fromApiTimestamp(timestamp: number | null | undefined): Date | null {
+  if (!timestamp || timestamp <= 0) return null;
+  
+  try {
+    // Convert seconds to milliseconds by multiplying by 1000
+    return new Date(timestamp * 1000);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Add seconds to current time and return as 10-digit Unix timestamp for API calls
+ * @param seconds Number of seconds to add
+ * @returns 10-digit Unix timestamp in seconds
+ */
+export function addSecondsToCurrentTime(seconds: number): number {
+  return getCurrentApiTimestamp() + seconds;
+}
+
+/**
+ * Convert a date string (like from date input) to 10-digit Unix timestamp for API calls
+ * @param dateString Date string (YYYY-MM-DD format)
+ * @returns 10-digit Unix timestamp in seconds, or null if invalid
+ */
+export function dateStringToApiTimestamp(dateString: string | null | undefined): number | null {
+  if (!dateString) return null;
+  return toApiTimestamp(new Date(dateString));
+}

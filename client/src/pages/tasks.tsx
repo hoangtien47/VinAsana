@@ -14,6 +14,7 @@ import { useUser } from "@/hooks/use-user";
 import { Button } from "@/components/ui/button";
 import { Loader2 } from "lucide-react";
 import { useTask } from "@/hooks/use-task";
+import { toApiTimestamp, getCurrentApiTimestamp, addSecondsToCurrentTime } from "@/lib/utils";
 import { useProject } from "@/hooks/use-project";
 
 export default function Tasks() {
@@ -122,16 +123,13 @@ export default function Tasks() {
         "in_progress": "IN_PROGRESS",
         "in_review": "IN_REVIEW",
         "done": "DONE"
-      };
-
-      // Transform form values to API format with proper typing
+      };      // Transform form values to API format with proper typing
       const apiTaskData = {
         name: values.title, // Map title to name for API
         description: values.description || "",
-        status: (statusMap[values.status] || "TODO") as "TODO" | "IN_PROGRESS" | "IN_REVIEW" | "DONE",
-        priority: (priorityMap[values.priority] || "MEDIUM") as "LOW" | "MEDIUM" | "HIGH" | "CRITICAL",
-        startDate: Date.now(),
-        endDate: values.dueDate ? new Date(values.dueDate).getTime() : Date.now() + 7 * 24 * 60 * 60 * 1000,
+        status: (statusMap[values.status] || "TODO") as "TODO" | "IN_PROGRESS" | "IN_REVIEW" | "DONE",        priority: (priorityMap[values.priority] || "MEDIUM") as "LOW" | "MEDIUM" | "HIGH" | "CRITICAL",
+        startDate: getCurrentApiTimestamp(),
+        endDate: values.dueDate ? toApiTimestamp(values.dueDate) || addSecondsToCurrentTime(7 * 24 * 60 * 60) : addSecondsToCurrentTime(7 * 24 * 60 * 60),
         assigneeId: values.assigneeId || "",
         projectId: projectId.toString() // Ensure it's a string
       };
@@ -220,22 +218,24 @@ export default function Tasks() {
       </div>
     );
   }
-
   return (
-    <div className="flex h-screen overflow-hidden bg-gray-50 dark:bg-gray-900">
+    <div className="flex h-screen bg-gray-50 dark:bg-gray-900">
       <Sidebar />
       <div className="flex flex-col flex-1 overflow-hidden">
         <Navbar 
           title="Tasks" 
           subtitle={projects?.find((p: any) => p.id === projectId)?.name} 
         />
-        <div className="flex-1 p-6 flex flex-col space-y-4 overflow-hidden">          {/* Project selector */}
+        <div className="flex-1 p-6 flex flex-col space-y-4 overflow-y-auto">
+          {/* Project selector */}
           {projects && projects.length > 1 && (
             <div className="flex items-center space-x-2">
-              <span className="text-sm font-medium">Project:</span>              <Select
+              <span className="text-sm font-medium">Project:</span>
+              <Select
                 value={projectId?.toString() || undefined}
                 onValueChange={(value) => handleProjectChange(value)}
-              ><SelectTrigger className="w-[250px]">
+              >
+                <SelectTrigger className="w-[250px]">
                   <SelectValue placeholder="Select a project" />
                 </SelectTrigger>
                 <SelectContent>
@@ -257,13 +257,13 @@ export default function Tasks() {
           />
 
           {/* Tabs for different views */}
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col overflow-hidden">
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col min-h-0">
             <TabsList className="mx-auto">
               <TabsTrigger value="kanban">Kanban Board</TabsTrigger>
               <TabsTrigger value="gantt">Gantt Chart</TabsTrigger>
             </TabsList>
             
-            <TabsContent value="kanban" className="flex-1 overflow-hidden mt-4">
+            <TabsContent value="kanban" className="flex-1 mt-4 min-h-0">
               {isLoadingTasks ? (
                 <div className="flex items-center justify-center h-full">
                   <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -280,7 +280,7 @@ export default function Tasks() {
               )}
             </TabsContent>
             
-            <TabsContent value="gantt" className="flex-1 overflow-hidden mt-4">
+            <TabsContent value="gantt" className="flex-1 mt-4 min-h-0">
               {isLoadingTasks ? (
                 <div className="flex items-center justify-center h-full">
                   <Loader2 className="h-8 w-8 animate-spin text-primary" />

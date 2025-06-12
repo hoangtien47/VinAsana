@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Calendar } from "@/components/ui/calendar";
+import { toApiTimestamp } from "@/lib/utils";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
@@ -52,13 +53,12 @@ export function ProjectForm({
   });
 
   const handleSubmit = async (values: ProjectFormValues) => {
-    try {
-      // Convert dates to timestamps
+          try {      // Convert dates to timestamps (10-digit seconds)
       const projectData: CreateProjectData = {
         name: values.name,
         description: values.description,
-        startDate: values.startDate.getTime(),
-        endDate: values.endDate.getTime(),
+        startDate: toApiTimestamp(values.startDate) || 0,
+        endDate: toApiTimestamp(values.endDate) || 0,
       };
       
       await onSubmit(projectData);

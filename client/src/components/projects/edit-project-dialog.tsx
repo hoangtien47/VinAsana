@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Calendar } from "@/components/ui/calendar";
+import { toApiTimestamp } from "@/lib/utils";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Slider } from "@/components/ui/slider";
@@ -72,15 +73,14 @@ export function EditProjectDialog({
         endDate: new Date(project.endDate),
       });
     }
-  }, [project, open, form]);
-  const handleSubmit = async (values: EditProjectFormData) => {
+  }, [project, open, form]);  const handleSubmit = async (values: EditProjectFormData) => {
     if (!project || !project.id) return;
 
     try {      await onSubmit(project.id, {
         name: values.name,
         description: values.description,
-        startDate: values.startDate.getTime(),
-        endDate: values.endDate.getTime(),
+        startDate: toApiTimestamp(values.startDate) || 0,
+        endDate: toApiTimestamp(values.endDate) || 0,
       });
       onClose();
     } catch (error) {

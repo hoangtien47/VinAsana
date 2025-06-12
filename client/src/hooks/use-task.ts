@@ -3,6 +3,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth0 } from "@auth0/auth0-react";
+import { toApiTimestamp, fromApiTimestamp, getCurrentApiTimestamp, addSecondsToCurrentTime } from "@/lib/utils";
 
 // Define the comment structure for tasks
 export interface Comment {
@@ -92,11 +93,10 @@ export function useTask() {
       title: apiTask.name, // Map name to title
       description: apiTask.description,
       status: statusMap[apiTask.status] || "todo",
-      priority: priorityMap[apiTask.priority] || "medium",
-      dueDate: apiTask.endDate ? new Date(apiTask.endDate).toISOString() : undefined,
+      priority: priorityMap[apiTask.priority] || "medium",      dueDate: apiTask.endDate ? fromApiTimestamp(apiTask.endDate)?.toISOString() : undefined,
       assigneeId: apiTask.assigneeId,
       order: 0, // Default order
-      createdAt: apiTask.startDate ? new Date(apiTask.startDate).toISOString() : new Date().toISOString(),
+      createdAt: fromApiTimestamp(apiTask.startDate)?.toISOString() || new Date().toISOString(),
       comments: apiTask.comments || []
     };
   };
@@ -114,15 +114,12 @@ export function useTask() {
       "medium": "MEDIUM",
       "high": "HIGH",
       "urgent": "CRITICAL"
-    };
-
-    return {
+    };    return {
       name: task.title || task.name,
       description: task.description || "",
       status: statusMap[task.status] || task.status?.toUpperCase() || "TODO",
-      priority: priorityMap[task.priority] || task.priority?.toUpperCase() || "MEDIUM",
-      startDate: task.startDate || Date.now(),
-      endDate: task.endDate || task.dueDate ? new Date(task.dueDate).getTime() : Date.now() + 7 * 24 * 60 * 60 * 1000,
+      priority: priorityMap[task.priority] || task.priority?.toUpperCase() || "MEDIUM",      startDate: task.startDate || getCurrentApiTimestamp(),
+      endDate: task.endDate || (task.dueDate ? toApiTimestamp(task.dueDate) : addSecondsToCurrentTime(7 * 24 * 60 * 60)) || getCurrentApiTimestamp(),
       assigneeId: task.assigneeId || "",
       projectId: task.projectId
     };
@@ -263,13 +260,13 @@ export function useTask() {
       // For CREATE requests, handle empty responses
       const text = await response.text();
       return text ? JSON.parse(text) : {};
-    },
-    onSuccess: () => {
+    },    onSuccess: () => {
       toast({
         title: "Success",
         description: "Task created successfully",
       });
       queryClient.invalidateQueries({ queryKey: ["tasks", projectId] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard-all-tasks"] });
     },
     onError: (error: Error) => {
       toast({
@@ -307,13 +304,13 @@ export function useTask() {
       // For UPDATE requests, handle empty responses
       const text = await response.text();
       return text ? JSON.parse(text) : {};
-    },
-    onSuccess: () => {
+    },    onSuccess: () => {
       toast({
         title: "Success",
         description: "Task updated successfully",
       });
       queryClient.invalidateQueries({ queryKey: ["tasks", projectId] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard-all-tasks"] });
     },
     onError: (error: Error) => {
       toast({
@@ -344,13 +341,13 @@ export function useTask() {
       // For DELETE requests, handle empty responses
       const text = await response.text();
       return text ? JSON.parse(text) : {};
-    },
-    onSuccess: () => {
+    },    onSuccess: () => {
       toast({
         title: "Success",
         description: "Task deleted successfully",
       });
       queryClient.invalidateQueries({ queryKey: ["tasks", projectId] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard-all-tasks"] });
     },
     onError: (error: Error) => {
       toast({
@@ -360,62 +357,97 @@ export function useTask() {
       });
     },
   });
+  // Get a single task by ID - using mutation for manual control
+  const getTaskByIdMutation = useMutation({
+    mutationFn: async (taskId: string) => {
+      try {
+        return await authFetch(`http://localhost:8080/v1/tasks/${taskId}`);
+      } catch (error) {
+        console.error("Failed to fetch task:", error);
+        throw error;
+      }
+    },
+  });
 
-  // Get a single task by ID
-  const getTask = async (taskId: string) => {
-    try {
-      return await authFetch(`http://localhost:8080/v1/tasks/${taskId}`);
-    } catch (error) {
-      console.error("Failed to fetch task:", error);
-      throw error;
-    }
-  };
-
-  // Add a comment to a task
-  const addComment = async (taskId: string, text: string) => {
-    try {
-      return await authFetch(`http://localhost:8080/v1/tasks/${taskId}/comments`, {
+  // Helper function for getting task by ID
+  const getTaskById = async (taskId: string) => {
+    return getTaskByIdMutation.mutateAsync(taskId);
+  };// Add a comment to a task - using mutation for proper cache invalidation
+  const addCommentMutation = useMutation({
+    mutationFn: async ({ taskId, content, userId }: { taskId: string; content: string; userId: string }) => {
+      return await authFetch(`http://localhost:8080/v1/comments`, {
         method: "POST",
-        body: JSON.stringify({ text }),
+        body: JSON.stringify({ content, userId, taskId }),
       });
-    } catch (error) {
+    },
+    onSuccess: (data, variables) => {
+      // Invalidate all relevant queries
+      queryClient.invalidateQueries({ queryKey: ["tasks", projectId] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard-all-tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["tasks"] });
+      // Invalidate the specific task-detail query using the taskId from variables
+      queryClient.invalidateQueries({ queryKey: ["task-detail", variables.taskId] });
+    },
+    onError: (error: Error) => {
       console.error("Failed to add comment:", error);
       throw error;
     }
-  };
-
-  // Upload an attachment to a task
-  const uploadAttachment = async (taskId: string, file: File) => {
-    try {
-      const token = await getAccessTokenSilently();
-      const formData = new FormData();
-      formData.append("file", file);
-      
-      const response = await fetch(`http://localhost:8080/v1/tasks/${taskId}/attachments`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-        body: formData,
+  });  // Update a comment - using mutation for proper cache invalidation
+  const updateCommentMutation = useMutation({
+    mutationFn: async ({ commentId, content, userId, taskId }: { commentId: string; content: string; userId: string; taskId: string }) => {
+      return await authFetch(`http://localhost:8080/v1/comments/${commentId}`, {
+        method: "PUT",
+        body: JSON.stringify({ content, userId, taskId }),
       });
-      
-      if (!response.ok) {
-        throw new Error(`Failed to upload attachment: ${response.statusText}`);
-      }
-      
-      queryClient.invalidateQueries({ queryKey: [`task-attachments-${taskId}`] });
-      return await response.json();
-    } catch (error) {
-      console.error("Failed to upload attachment:", error);
+    },
+    onSuccess: (data, variables) => {
+      // Invalidate all relevant queries
+      queryClient.invalidateQueries({ queryKey: ["tasks", projectId] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard-all-tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["tasks"] });
+      // Invalidate the specific task-detail query using the taskId from variables
+      queryClient.invalidateQueries({ queryKey: ["task-detail", variables.taskId] });
+    },
+    onError: (error: Error) => {
+      console.error("Failed to update comment:", error);
       throw error;
     }
+  });  // Delete a comment - using mutation for proper cache invalidation
+  const deleteCommentMutation = useMutation({
+    mutationFn: async ({ commentId, taskId }: { commentId: string; taskId: string }) => {
+      return await authFetch(`http://localhost:8080/v1/comments/${commentId}`, {
+        method: "DELETE",
+      });
+    },
+    onSuccess: (data, variables) => {
+      // Invalidate all relevant queries
+      queryClient.invalidateQueries({ queryKey: ["tasks", projectId] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard-all-tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["tasks"] });
+      // Invalidate the specific task-detail query using the taskId from variables
+      queryClient.invalidateQueries({ queryKey: ["task-detail", variables.taskId] });
+    },
+    onError: (error: Error) => {
+      console.error("Failed to delete comment:", error);
+      throw error;
+    }
+  });
+
+  // Helper functions that use the mutations
+  const addComment = async (taskId: string, content: string, userId: string) => {
+    return addCommentMutation.mutateAsync({ taskId, content, userId });
   };
 
+  const updateComment = async (commentId: string, content: string, userId: string, taskId: string) => {
+    return updateCommentMutation.mutateAsync({ commentId, content, userId, taskId });
+  };
+  const deleteComment = async (commentId: string, taskId: string) => {
+    return deleteCommentMutation.mutateAsync({ commentId, taskId });
+  };
   return {
     tasks,
     tasksData, // Full paginated response
-    isLoading,
-    error,
+    isLoading,    error,
     projectId,
     setProjectId,
     fetchTasks,
@@ -423,11 +455,16 @@ export function useTask() {
     createTask: createTaskMutation.mutate,
     updateTask: updateTaskMutation.mutate,
     deleteTask: deleteTaskMutation.mutate,
-    getTask,
+    getTaskById,
     addComment,
-    uploadAttachment,
+    updateComment,
+    deleteComment,
     isCreating: createTaskMutation.isPending,
     isUpdating: updateTaskMutation.isPending,
     isDeleting: deleteTaskMutation.isPending,
+    isAddingComment: addCommentMutation.isPending,
+    isUpdatingComment: updateCommentMutation.isPending,
+    isDeletingComment: deleteCommentMutation.isPending,
+    isFetchingTask: getTaskByIdMutation.isPending,
   };
 }

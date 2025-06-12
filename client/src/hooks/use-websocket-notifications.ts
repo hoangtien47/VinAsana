@@ -41,16 +41,13 @@ export const useWebSocketNotifications = () => {
         connectHeaders: {
           Authorization: `Bearer ${accessToken}`,
         },
-        debug: (str) => {
-          console.log('STOMP Debug:', str)
-        },
+
         reconnectDelay: 5000,
         heartbeatIncoming: 4000,
         heartbeatOutgoing: 4000,
       })
 
       client.onConnect = (frame) => {
-        console.log('WebSocket: Connected to STOMP server', frame)
         setIsConnected(true)
 
         // Subscribe to task reminder queue for the authenticated user
@@ -59,7 +56,6 @@ export const useWebSocketNotifications = () => {
           (message) => {
             try {
               const taskNotification: TaskNotification = JSON.parse(message.body)
-              console.log('WebSocket: Received task notification:', taskNotification)
               
               // Add to notifications list
               setNotifications(prev => [taskNotification, ...prev.slice(0, 9)]) // Keep last 10 notifications
@@ -75,8 +71,7 @@ export const useWebSocketNotifications = () => {
             }
           }
         )
-
-        console.log('WebSocket: Subscribed to task reminders:', subscription.id)
+        
       }
 
       client.onStompError = (frame) => {

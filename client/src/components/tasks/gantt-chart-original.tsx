@@ -1,11 +1,9 @@
 import { useEffect, useState, useRef } from "react";
-import { ChevronLeft, ChevronRight, Calendar, BarChart3 } from "lucide-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { format, addDays, startOfMonth, endOfMonth, addMonths, subMonths, eachDayOfInterval, isToday, isBefore, isWeekend } from "date-fns";
-import { CalendarMonthView } from "./gantt-chart-calendar-month";
 
 interface Task {
   id: string;
@@ -20,8 +18,6 @@ interface GanttChartProps {
   tasks: Task[];
   onTaskClick: (task: Task) => void;
 }
-
-type ViewType = 'timeline' | 'calendar';
 
 // Vibrant color palette for task bars (matching calendar style)
 const TASK_COLORS = [
@@ -73,8 +69,7 @@ const formatPriority = (priority: string) => {
   return priorityMap[priority] || priority.toUpperCase();
 };
 
-// Timeline Week View Component
-function TimelineWeekView({ tasks, onTaskClick }: { tasks: Task[], onTaskClick: (task: Task) => void }) {
+export function GanttChart({ tasks, onTaskClick }: GanttChartProps) {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [dates, setDates] = useState<Date[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -89,27 +84,36 @@ function TimelineWeekView({ tasks, onTaskClick }: { tasks: Task[], onTaskClick: 
              taskDate.getFullYear() === date.getFullYear();
     });
   };
-
-  // Generate array of dates for the current week (7 days)
+  // Generate array of dates for the entire month
   useEffect(() => {
-    const weekStart = new Date(currentDate);
-    weekStart.setDate(currentDate.getDate() - currentDate.getDay()); // Start from Sunday
-    const weekDates = Array.from({ length: 7 }, (_, i) => {
-      const date = new Date(weekStart);
-      date.setDate(weekStart.getDate() + i);
-      return date;
-    });
-    setDates(weekDates);
+    const monthStart = startOfMonth(currentDate);
+    const monthEnd = endOfMonth(currentDate);
+    const newDates = eachDayOfInterval({ start: monthStart, end: monthEnd });
+    setDates(newDates);
+    
+    // Auto-scroll to today when viewing current month
+    if (currentDate.getMonth() === new Date().getMonth() && 
+        currentDate.getFullYear() === new Date().getFullYear()) {
+      setTimeout(() => {
+        const todayIndex = newDates.findIndex(date => isToday(date));
+        if (scrollRef.current && todayIndex >= 0) {
+          const dayWidth = 150;
+          const containerWidth = scrollRef.current.clientWidth;
+          const scrollPosition = Math.max(0, (todayIndex * dayWidth) - (containerWidth / 2));
+          scrollRef.current.scrollLeft = scrollPosition;
+        }
+      }, 100);
+    }
   }, [currentDate]);
-
   const handleScrollToToday = () => {
     const today = new Date();
     setCurrentDate(today);
     
     setTimeout(() => {
       const todayIndex = dates.findIndex(date => isToday(date));
-      const dayWidth = 150;
+      const dayWidth = 150; // Fixed width per day
       if (scrollRef.current && todayIndex >= 0) {
+        // Center today in the view
         const containerWidth = scrollRef.current.clientWidth;
         const scrollPosition = Math.max(0, (todayIndex * dayWidth) - (containerWidth / 2));
         scrollRef.current.scrollLeft = scrollPosition;
@@ -117,20 +121,12 @@ function TimelineWeekView({ tasks, onTaskClick }: { tasks: Task[], onTaskClick: 
     }, 100);
   };
 
-  const handleNextWeek = () => {
-    setCurrentDate(prev => {
-      const next = new Date(prev);
-      next.setDate(prev.getDate() + 7);
-      return next;
-    });
+  const handleNextMonth = () => {
+    setCurrentDate(prev => addMonths(prev, 1));
   };
 
-  const handlePrevWeek = () => {
-    setCurrentDate(prev => {
-      const prev7 = new Date(prev);
-      prev7.setDate(prev.getDate() - 7);
-      return prev7;
-    });
+  const handlePrevMonth = () => {
+    setCurrentDate(prev => subMonths(prev, 1));
   };
 
   // Calculate task position and width based on created and due dates
@@ -164,28 +160,17 @@ function TimelineWeekView({ tasks, onTaskClick }: { tasks: Task[], onTaskClick: 
     };
   };
 
-  const getWeekRange = () => {
-    if (dates.length === 0) return '';
-    const start = dates[0];
-    const end = dates[6];
-    if (start.getMonth() === end.getMonth()) {
-      return `${format(start, 'MMM d')} - ${format(end, 'd, yyyy')}`;
-    }
-    return `${format(start, 'MMM d')} - ${format(end, 'MMM d, yyyy')}`;
-  };
-
   return (
-    <>
-      <CardHeader className="pb-3">
-        <div className="flex items-center justify-between">
+    <Card className="w-full">
+      <CardHeader className="pb-3">        <div className="flex items-center justify-between">
           <CardTitle className="text-xl font-bold flex items-center gap-2">
-            <span>Week View</span>
+            <span>{format(currentDate, 'MMMM yyyy')}</span>
             <span className="text-sm font-normal text-gray-500 dark:text-gray-400">
-              {getWeekRange()}
+              ({dates.length} days)
             </span>
           </CardTitle>
           <div className="flex items-center space-x-2">
-            <Button variant="outline" size="sm" onClick={handlePrevWeek}>
+            <Button variant="outline" size="sm" onClick={handlePrevMonth}>
               <ChevronLeft className="h-4 w-4" />
               <span className="ml-1 hidden sm:inline">Prev</span>
             </Button>
@@ -197,7 +182,7 @@ function TimelineWeekView({ tasks, onTaskClick }: { tasks: Task[], onTaskClick: 
             >
               Today
             </Button>
-            <Button variant="outline" size="sm" onClick={handleNextWeek}>
+            <Button variant="outline" size="sm" onClick={handleNextMonth}>
               <span className="mr-1 hidden sm:inline">Next</span>
               <ChevronRight className="h-4 w-4" />
             </Button>
@@ -206,8 +191,7 @@ function TimelineWeekView({ tasks, onTaskClick }: { tasks: Task[], onTaskClick: 
       </CardHeader>
       
       <CardContent className="p-0">
-        <div ref={scrollRef} className="overflow-x-auto">
-          {/* Week Header - 7 days */}
+        <div ref={scrollRef} className="overflow-x-auto">          {/* Calendar Header - All days of the month */}
           <div className="flex border-b bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-700" style={{ minWidth: `${dates.length * 150}px` }}>
             {dates.map((date, i) => {
               const dayTasks = getTasksForDate(date);
@@ -253,12 +237,11 @@ function TimelineWeekView({ tasks, onTaskClick }: { tasks: Task[], onTaskClick: 
             })}
           </div>
           
-          {/* Timeline Body with Tasks */}
+          {/* Calendar Body with Tasks */}
           <div className="relative bg-white dark:bg-gray-900" style={{ 
             minHeight: '600px',
             minWidth: `${dates.length * 150}px` 
-          }}>
-            {/* Grid Background - 7 days */}
+          }}>            {/* Grid Background - All days of the month */}
             <div className="absolute inset-0 flex">
               {dates.map((date, i) => (
                 <div 
@@ -391,12 +374,11 @@ function TimelineWeekView({ tasks, onTaskClick }: { tasks: Task[], onTaskClick: 
                     </TooltipProvider>
                   );
                 })
-              }
-            </div>
+              }            </div>
           </div>
         </div>
         
-        {/* Week Summary */}
+        {/* Month Summary */}
         <div className="border-t bg-gray-50 dark:bg-gray-800 px-6 py-4">
           <div className="flex items-center justify-between text-sm">
             <div className="flex items-center gap-6">
@@ -411,54 +393,11 @@ function TimelineWeekView({ tasks, onTaskClick }: { tasks: Task[], onTaskClick: 
               </span>
             </div>
             <div className="text-gray-500 dark:text-gray-400">
-              Week view: {getWeekRange()}
+              Month view: {format(dates[0] || new Date(), 'MMM d')} - {format(dates[dates.length - 1] || new Date(), 'MMM d, yyyy')}
             </div>
           </div>
         </div>
       </CardContent>
-    </>
-  );
-}
-
-export function GanttChart({ tasks, onTaskClick }: GanttChartProps) {
-  const [viewType, setViewType] = useState<ViewType>('timeline');
-
-  return (
-    <Card className="w-full">
-      {/* View Selector */}
-      <div className="border-b bg-gray-50/50 dark:bg-gray-800/50 px-6 py-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <h3 className="font-semibold text-gray-900 dark:text-gray-100">Project Timeline</h3>
-            <Select value={viewType} onValueChange={(value: ViewType) => setViewType(value)}>
-              <SelectTrigger className="w-48">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="timeline">
-                  <div className="flex items-center gap-2">
-                    <BarChart3 className="h-4 w-4" />
-                    Timeline (Week View)
-                  </div>
-                </SelectItem>
-                <SelectItem value="calendar">
-                  <div className="flex items-center gap-2">
-                    <Calendar className="h-4 w-4" />
-                    Calendar (Month View)
-                  </div>
-                </SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-      </div>
-
-      {/* Render selected view */}
-      {viewType === 'timeline' ? (
-        <TimelineWeekView tasks={tasks} onTaskClick={onTaskClick} />
-      ) : (
-        <CalendarMonthView tasks={tasks} onTaskClick={onTaskClick} />
-      )}
     </Card>
   );
 }

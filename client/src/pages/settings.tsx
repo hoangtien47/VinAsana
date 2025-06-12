@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useLocation } from "wouter";
 import { Sidebar } from "@/components/ui/sidebar";
 import { Navbar } from "@/components/ui/navbar";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -22,6 +23,7 @@ export default function Settings() {
   const { settings: appearanceSettings, updateSettings: updateAppearance, getEffectiveTheme } = useAppearance();
   const { t } = useI18n();
   const [activeTab, setActiveTab] = useState("profile");
+  const [, setLocation] = useLocation();
   
   const [profileForm, setProfileForm] = useState({
     nickname: "",
@@ -93,12 +95,15 @@ export default function Settings() {
 
   const handleDefaultViewChange = (defaultView: DefaultView) => {
     updateAppearance({ defaultView });
-  };
-  const handleSaveAppearance = () => {
+  };  const handleSaveAppearance = () => {
     toast({
       title: t("settings.appearance.saveSuccess"),
       description: t("settings.appearance.saveSuccessDescription"),
     });
+  };
+
+  const handleChangePassword = () => {
+    setLocation("/reset-password");
   };
 
   return (
@@ -344,10 +349,11 @@ export default function Settings() {
                       </div>
                       <Button variant="outline">{t("settings.security.setUp")}</Button>
                     </div>
-                    
-                    <div className="border-t pt-4">
+                      <div className="border-t pt-4">
                       <h3 className="font-medium mb-3">{t("settings.security.password")}</h3>
-                      <Button variant="outline">{t("settings.security.changePassword")}</Button>
+                      <Button variant="outline" onClick={handleChangePassword}>
+                        {t("settings.security.changePassword")}
+                      </Button>
                     </div>
                     
                     <div className="border-t pt-4">
