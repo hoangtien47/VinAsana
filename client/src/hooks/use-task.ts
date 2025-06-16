@@ -69,7 +69,7 @@ export interface CreateTaskData {
   comments?: Comment[];
 }
 
-export function useTask() {
+export function useTask(size?: number, page?: number) {
   const { toast } = useToast();
   const { getAccessTokenSilently, isAuthenticated } = useAuth0();
   const [projectId, setProjectId] = useState<string | null>(null);
@@ -157,10 +157,10 @@ export function useTask() {
     
     // For non-JSON responses or empty responses, return null
     return null;
-  };
-  // Helper function to build filter URL
-  const buildTasksUrl = (filters?: { projectId?: string; status?: string; priority?: string; assigneeId?: string }) => {
+  };  // Helper function to build filter URL
+  const buildTasksUrl = (filters?: { projectId?: string; status?: string; priority?: string; assigneeId?: string; size?: number; page?: number }) => {
     const baseUrl = `${apiBaseUrl}/v1/tasks`;
+    const urlParams = new URLSearchParams();
     
     if (!filters || Object.keys(filters).length === 0) {
       return baseUrl;
@@ -185,15 +185,25 @@ export function useTask() {
       filterParts.push(`assigneeId=${filters.assigneeId}`);
     }
 
-    if (filterParts.length === 0) {
-      return baseUrl;
+    // Add pagination parameters
+    if (filters.size !== undefined) {
+      urlParams.append('size', filters.size.toString());
+    }
+    
+    if (filters.page !== undefined) {
+      urlParams.append('page', filters.page.toString());
     }
 
-    // Join multiple filters with AND (you might need to check your backend for the exact syntax)
-    const filterString = filterParts.join('%20AND%20'); // URL encoded " AND "
-    return `${baseUrl}?filter=${encodeURIComponent(filterString)}`;
-  };
+    // Add filter parameter if there are filters
+    if (filterParts.length > 0) {
+      const filterString = filterParts.join('%20AND%20'); // URL encoded " AND "
+      urlParams.append('filter', filterString);
+    }
 
+    // Build final URL
+    const queryString = urlParams.toString();
+    return queryString ? `${baseUrl}?${queryString}` : baseUrl;
+  };
   // Fetch tasks for the active project
   const {
     data: tasksData,
@@ -201,9 +211,10 @@ export function useTask() {
     error,
     refetch,
   } = useQuery<TasksResponse>({
-    queryKey: ["tasks", projectId],
+    queryKey: ["tasks", projectId, size, page],
     queryFn: () => {
-      const url = buildTasksUrl(projectId ? { projectId } : undefined);
+      const filters = projectId ? { projectId, size, page } : { size, page };
+      const url = buildTasksUrl(filters);
       console.log("Fetching tasks from URL:", url);
       return authFetch(url);
     },
@@ -213,9 +224,8 @@ export function useTask() {
   // Transform API tasks to frontend tasks
   const tasks = tasksData?.items?.map(transformTask) || [];
   console.log("Transformed Tasks:", tasks);
-
   // Fetch tasks with filters
-  const fetchTasks = async (newProjectId: string, additionalFilters?: { status?: string; priority?: string; assigneeId?: string }) => {
+  const fetchTasks = async (newProjectId: string, additionalFilters?: { status?: string; priority?: string; assigneeId?: string; size?: number; page?: number }) => {
     setProjectId(newProjectId);
     if (newProjectId) {
       const filters = { projectId: newProjectId, ...additionalFilters };
@@ -227,9 +237,8 @@ export function useTask() {
       });
     }
   };
-
   // Fetch tasks with custom filters (useful for advanced filtering)
-  const fetchTasksWithFilters = async (filters: { projectId?: string; status?: string; priority?: string; assigneeId?: string }) => {
+  const fetchTasksWithFilters = async (filters: { projectId?: string; status?: string; priority?: string; assigneeId?: string; size?: number; page?: number }) => {
     const url = buildTasksUrl(filters);
     console.log("Fetching tasks with filters:", url);
     
@@ -266,6 +275,7 @@ export function useTask() {
       });
       queryClient.invalidateQueries({ queryKey: ["tasks", projectId] });
       queryClient.invalidateQueries({ queryKey: ["dashboard-all-tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["projects"] });
     },
     onError: (error: Error) => {
       toast({
@@ -309,6 +319,7 @@ export function useTask() {
       });
       queryClient.invalidateQueries({ queryKey: ["tasks", projectId] });
       queryClient.invalidateQueries({ queryKey: ["dashboard-all-tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["projects"] });
     },
     onError: (error: Error) => {
       toast({
@@ -340,11 +351,11 @@ export function useTask() {
       return text ? JSON.parse(text) : {};
     },    onSuccess: () => {
       toast({
-        title: "Success",
-        description: "Task deleted successfully",
+        title: "Success",        description: "Task deleted successfully",
       });
       queryClient.invalidateQueries({ queryKey: ["tasks", projectId] });
       queryClient.invalidateQueries({ queryKey: ["dashboard-all-tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["projects"] });
     },
     onError: (error: Error) => {
       toast({

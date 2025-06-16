@@ -24,7 +24,7 @@ const taskFormSchema = z.object({
   description: z.string().optional(),
   status: z.enum([ "todo", "in_progress", "in_review", "done"]),
   priority: z.enum(["low", "medium", "high", "urgent"]),
-  projectId: z.number(),
+  projectId: z.string(),
   assigneeId: z.string().optional().or(z.literal(undefined)),
   dueDate: z.date().optional(),
   order: z.number().optional(),
@@ -36,7 +36,7 @@ interface TaskFormProps {
   open: boolean;
   onClose: () => void;
   onSubmit: (values: TaskFormValues) => Promise<void>;
-  projectId: number;
+  projectId: string;
   defaultValues?: Partial<TaskFormValues>;
   isEditMode?: boolean;
 }
@@ -86,6 +86,7 @@ export function TaskForm({
 
   const handleSubmit = async (values: TaskFormValues) => {
     try {
+      console.log("Submitting task with values:", values); // Debug log
       await onSubmit(values);
       onClose();
       toast({

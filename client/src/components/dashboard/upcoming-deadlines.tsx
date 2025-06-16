@@ -13,7 +13,7 @@ interface Task {
   priority: string;
   dueDate: string;
   project: {
-    id: number;
+    id: string;
     name: string;
   };
   assignee?: {

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Sidebar } from "@/components/ui/sidebar";
 import { Navbar } from "@/components/ui/navbar";
 import { Button } from "@/components/ui/button";
@@ -49,10 +49,10 @@ export default function Projects() {
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState("name");
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [projectToDelete, setProjectToDelete] = useState<Project | null>(null);
-  const [selectedProject, setSelectedProject] = useState<Project | null>(null);
+  const [projectToDelete, setProjectToDelete] = useState<Project | null>(null);  const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
+  
   const { projects, isLoading, createProject, deleteProject, updateProject, isCreating, isDeleting, isUpdating } = useProject();
   const { toast } = useToast();
 
@@ -301,9 +301,7 @@ export default function Projects() {
                         <div className="text-xs text-gray-500">
                           {project.doneTaskCount} of {project.taskCount} tasks completed
                         </div>
-                      </div>
-
-                      {/* Dates */}
+                      </div>                      {/* Dates */}
                       <div className="space-y-2 text-sm">
                         <div className="flex items-center text-gray-600 dark:text-gray-400">
                           <Calendar className="h-4 w-4 mr-2" />
@@ -311,8 +309,9 @@ export default function Projects() {
                             {format(new Date(project.startDate), "MMM d, yyyy")} - {" "}
                             {format(new Date(project.endDate), "MMM d, yyyy")}
                           </span>
-                        </div>
-                      </div>                      {/* Action Buttons */}
+                        </div>                      </div>
+
+                      {/* Action Buttons */}
                       <div className="flex gap-2 pt-2">
                         <Button 
                           variant="outline" 
@@ -325,7 +324,7 @@ export default function Projects() {
                         </Button>
                         <Button variant="outline" size="sm" className="flex-1">
                           <Users className="h-4 w-4 mr-2" />
-                          Team
+                          Team ({project.userIds?.length || 0})
                         </Button>
                       </div>
                     </CardContent>
@@ -339,9 +338,7 @@ export default function Projects() {
           open={isProjectFormOpen}
           onClose={() => setIsProjectFormOpen(false)}
           onSubmit={handleCreateProject}
-        />
-
-        {/* Project Details Dialog */}
+        />        {/* Project Details Dialog */}
         {selectedProject && (
           <ProjectDetails
             project={selectedProject}
@@ -352,7 +349,7 @@ export default function Projects() {
               setIsEditOpen(true);
             }}
           />
-        )}        {/* Edit Project Dialog */}
+        )}{/* Edit Project Dialog */}
         {selectedProject && (
           <EditProjectDialog
             project={selectedProject}

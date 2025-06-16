@@ -9,7 +9,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useQuery } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
+import { useAuth0 } from "@auth0/auth0-react";
+import { useProject } from "@/hooks/use-project";
+import { useTask } from "@/hooks/use-task";
+import { useStatistics } from "@/hooks/use-statistics";
+import { useUser } from "@/hooks/use-user";
 import { format, addDays, subDays } from "date-fns";
+import { getApiBaseUrl } from "@/lib/utils";
 import { 
   Loader2, 
   TrendingUp, 
@@ -19,62 +25,144 @@ import {
   Users
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { 
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 export default function Analytics() {
   const { user } = useAuth();
   const { toast } = useToast();
-  const [projectId, setProjectId] = useState<number | null>(null);
+  const { getAccessTokenSilently, isAuthenticated } = useAuth0();
+  const [projectId, setProjectId] = useState<string | null>(null);
+  const [workloadData, setWorkloadData] = useState<{ name: string; Tasks: number; }[]>([]);  
+  const { projects, isLoading: isLoadingProjects } = useProject();
+  const { useTaskCountForAllUsers, useTaskCountForEachUser } = useStatistics();
+  const { getUser } = useUser();
+  const apiBaseUrl = getApiBaseUrl();
 
-  // Get the first project ID for now, in a real application you'd want to get this from the URL
+  // Use the task hook to get tasks for the active project
   const {
-    data: projects,
-    isLoading: isLoadingProjects,
-    error: projectsError,
-  } = useQuery({
-    queryKey: ['/api/projects'],
-    enabled: !!user,
-  });
-
-  // Set the first project as active when projects load
-  useEffect(() => {
-    if (projects && projects.length > 0 && !projectId) {
-      setProjectId(projects[0].id);
-    }
-  }, [projects, projectId]);
-
-  // Fetch tasks for the active project
-  const {
-    data: tasks,
+    tasks,
     isLoading: isLoadingTasks,
     error: tasksError,
-  } = useQuery({
-    queryKey: [`/api/projects/${projectId}/tasks`],
-    enabled: !!projectId,
-  });
+    setProjectId: setTaskProjectId,
+  } = useTask(50); // Get up to 50 tasks for analytics
 
-  // Fetch team members for the active project
+  // Component to display individual team member performance using userId
+  const TeamMemberPerformance = ({ userId }: { userId: string }) => {
+    const { 
+      data: taskCounts, 
+      isLoading: isLoadingTaskCounts 
+    } = useTaskCountForEachUser(projectId || undefined, userId);
+
+    const [userDetails, setUserDetails] = useState<any>(null);
+    const [isLoadingUser, setIsLoadingUser] = useState(true);
+
+    // Fetch user details
+    useEffect(() => {
+      const fetchUserDetails = async () => {
+        try {
+          setIsLoadingUser(true);
+          const user = await getUser(userId);
+          setUserDetails(user);
+        } catch (error) {
+          console.error(`Failed to fetch user ${userId}:`, error);
+          setUserDetails({
+            nickname: `User ${userId.slice(-4)}`,
+            email: `user-${userId.slice(-4)}@example.com`,
+          });
+        } finally {
+          setIsLoadingUser(false);
+        }
+      };
+
+      fetchUserDetails();
+    }, [userId, getUser]);
+
+    if (isLoadingTaskCounts || isLoadingUser) {
+      return (
+        <div className="space-y-1">
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-medium">Loading...</span>
+            <span className="text-sm text-gray-500">Loading...</span>
+          </div>
+          <div className="h-2 bg-gray-200 rounded animate-pulse" />
+        </div>
+      );
+    }
+
+    if (!taskCounts) {
+      return (
+        <div className="space-y-1">
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-medium">
+              {userDetails?.nickname || userDetails?.email || 'Unknown User'}
+            </span>
+            <span className="text-sm text-gray-500">No data</span>
+          </div>
+          <div className="h-2 bg-gray-200 rounded" />
+        </div>
+      );
+    }
+
+    const totalTasks = taskCounts.todo + taskCounts.inProgress + taskCounts.inReview + taskCounts.done;
+    const completionRate = totalTasks > 0 ? (taskCounts.done / totalTasks) * 100 : 0;
+
+    return (
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <span className="text-sm font-medium">
+            {userDetails?.nickname || userDetails?.email || 'Unknown User'}
+          </span>
+          <span className="text-sm text-gray-500">{totalTasks} tasks</span>
+        </div>
+        <Progress value={completionRate} className="h-2" />
+        <div className="flex justify-between text-xs text-gray-500">
+          <span>Todo: {taskCounts.todo}</span>
+          <span>In Progress: {taskCounts.inProgress}</span>
+          <span>Review: {taskCounts.inReview}</span>
+          <span>Done: {taskCounts.done}</span>
+        </div>
+      </div>
+    );
+  };  
+
+  useEffect(() => {
+    if (projects && projects.length > 0 && !projectId) {
+      const firstProjectId = projects[0].id || null;
+      setProjectId(firstProjectId);
+      if (firstProjectId) {
+        setTaskProjectId(firstProjectId);
+      }
+    }
+  }, [projects, projectId, setTaskProjectId]);
+
+  // Get current project data
+  const currentProject = projects?.find(p => p.id === projectId);
+
+  // Fetch task count statistics for workload distribution
   const {
-    data: members,
-    isLoading: isLoadingMembers,
-    error: membersError,
-  } = useQuery({
-    queryKey: [`/api/projects/${projectId}/members`],
-    enabled: !!projectId,
-  });
-
-  // Calculate completion rate
+    data: taskCountData,
+    isLoading: isLoadingTaskCount,
+    error: taskCountError,
+  } = useTaskCountForAllUsers(projectId || undefined);
   const calculateCompletionRate = () => {
-    if (!tasks) return 0;
-    const completedTasks = tasks.filter((task: any) => task.status === "done").length;
-    return tasks.length > 0 ? Math.round((completedTasks / tasks.length) * 100) : 0;
+    if (!projectId || !projects) return 0;
+    const selectedProject = projects.find(p => p.id === projectId);
+    if (!selectedProject) return 0;
+    
+    return selectedProject.progress || 0;
   };
 
-  // Generate sample productivity data for line chart
   const generateProductivityData = () => {
     const data = [];
     for (let i = 6; i >= 0; i--) {
       const date = subDays(new Date(), i);
-      const completedTasks = Math.floor(Math.random() * 5) + 1; // Random number between 1-5
+      const completedTasks = Math.floor(Math.random() * 5) + 1; 
       
       data.push({
         date: format(date, 'MMM dd'),
@@ -83,16 +171,51 @@ export default function Analytics() {
     }
     return data;
   };
-
-  // Generate sample workload distribution data for horizontal bar chart
-  const generateWorkloadData = () => {
-    if (!members) return [];
+  
+  // Generate workload distribution data from real statistics
+  const generateWorkloadData = async () => {
+    if (!taskCountData) return [];
     
-    return members.slice(0, 5).map((member: any) => ({
-      name: `${member.user.firstName || ''} ${member.user.lastName || ''}`,
-      Tasks: Math.floor(Math.random() * 10) + 1, // Random number between 1-10
-    }));
-  };
+    try {
+      // Get user details for each user ID in the task count data
+      const workloadData = await Promise.all(
+        Object.entries(taskCountData).map(async ([userId, taskCount]) => {
+          try {
+            const user = await getUser(userId);
+            return {
+              name: user?.nickname || user?.email || 'Unknown User',
+              Tasks: taskCount,
+            };
+          } catch (error) {
+            console.error(`Failed to fetch user ${userId}:`, error);
+            return {
+              name: `User ${userId.slice(-4)}`, // Show last 4 chars of userId as fallback
+              Tasks: taskCount,
+            };
+          }
+        })
+      );
+      
+      // Sort by task count descending and return top 10
+      return workloadData.sort((a, b) => b.Tasks - a.Tasks).slice(0, 10);
+    } catch (error) {
+      console.error('Failed to generate workload data:', error);
+      return [];
+    }  };
+
+  // Update workload data when task count data changes
+  useEffect(() => {
+    const updateWorkloadData = async () => {
+      if (taskCountData) {
+        const data = await generateWorkloadData();
+        setWorkloadData(data);
+      } else {
+        setWorkloadData([]);
+      }
+    };
+
+    updateWorkloadData();
+  }, [taskCountData]);
 
   // Loading state
   if (isLoadingProjects) {
@@ -123,32 +246,33 @@ export default function Analytics() {
       </div>
     );
   }
-
   const completionRate = calculateCompletionRate();
   const productivityData = generateProductivityData();
-  const workloadData = generateWorkloadData();
 
   return (
     <div className="flex h-screen overflow-hidden bg-gray-50 dark:bg-gray-900">
       <Sidebar />
       <div className="flex flex-col flex-1 overflow-hidden">
         <Navbar title="Analytics" subtitle={projects?.find((p: any) => p.id === projectId)?.name} />
-        <div className="flex-1 p-6 overflow-auto">
-          {/* Project selector */}
+        <div className="flex-1 p-6 overflow-auto">          {/* Project selector */}
           {projects && projects.length > 1 && (
             <div className="flex items-center space-x-2 mb-4">
-              <span className="text-sm font-medium">Project:</span>
-              <select
-                className="border border-gray-300 rounded-md px-2 py-1 text-sm"
-                value={projectId || ''}
-                onChange={(e) => setProjectId(Number(e.target.value))}
-              >
-                {projects.map((project: any) => (
-                  <option key={project.id} value={project.id}>
-                    {project.name}
-                  </option>
-                ))}
-              </select>
+              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Project:</span>
+              <Select value={projectId || ''} onValueChange={(value) => {
+                setProjectId(value);
+                setTaskProjectId(value);
+              }}>
+                <SelectTrigger className="w-[200px]">
+                  <SelectValue placeholder="Select a project" />
+                </SelectTrigger>
+                <SelectContent>
+                  {projects.map((project: any) => (
+                    <SelectItem key={project.id} value={project.id}>
+                      {project.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           )}
 
@@ -172,14 +296,13 @@ export default function Analytics() {
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium text-gray-500">Total Tasks</CardTitle>
-              </CardHeader>
-              <CardContent>
+              </CardHeader>              <CardContent>
                 <div className="flex items-center justify-between">
-                  <span className="text-2xl font-bold">{tasks?.length || 0}</span>
+                  <span className="text-2xl font-bold">{projects?.find(p => p.id === projectId)?.taskCount || 0}</span>
                   <Activity className="text-blue-500 h-5 w-5" />
                 </div>
                 <p className="text-xs text-gray-500 mt-1">
-                  {tasks?.filter((t: any) => t.status === "done").length || 0} completed
+                  {projects?.find(p => p.id === projectId)?.doneTaskCount || 0} completed
                 </p>
               </CardContent>
             </Card>
@@ -190,7 +313,7 @@ export default function Analytics() {
               </CardHeader>
               <CardContent>
                 <div className="flex items-center justify-between">
-                  <span className="text-2xl font-bold">{members?.length || 0}</span>
+                  <span className="text-2xl font-bold">{projects?.find(p => p.id === projectId)?.userIds.length || 0}</span>
                   <Users className="text-purple-500 h-5 w-5" />
                 </div>
                 <p className="text-xs text-gray-500 mt-1">
@@ -233,33 +356,29 @@ export default function Analytics() {
                   dataKeys={["Completed"]}
                   colors={["#3b82f6"]}
                 />
-                
-                <ChartComponent
+                  <ChartComponent
                   title="Workload Distribution"
-                  description="Tasks assigned per team member"
+                  description={isLoadingTaskCount ? "Loading task assignments..." : "Tasks assigned per team member"}
                   type="horizontalBar"
-                  data={workloadData}
+                  data={isLoadingTaskCount ? [] : workloadData as any}
                   xAxisKey="name"
                   dataKeys={["Tasks"]}
                   colors={["#8b5cf6"]}
                 />
               </div>
-              
-              {isLoadingTasks || isLoadingMembers ? (
+                {isLoadingTasks ? (
                 <div className="flex items-center justify-center h-64">
                   <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                </div>
-              ) : (
+                </div>              ) : (
                 <ProjectAnalytics
                   projectId={projectId!}
-                  tasks={tasks}
-                  members={members}
+                  tasks={tasks || []}
+                  members={currentProject?.userIds?.map(userId => ({ userId, user: { id: userId } })) || []}
                 />
               )}
             </TabsContent>
-            
-            <TabsContent value="details">
-              {isLoadingTasks || isLoadingMembers ? (
+              <TabsContent value="details">
+              {isLoadingTasks ? (
                 <div className="flex items-center justify-center h-64">
                   <Loader2 className="h-8 w-8 animate-spin text-primary" />
                 </div>
@@ -268,20 +387,18 @@ export default function Analytics() {
                   <Card>
                     <CardHeader>
                       <CardTitle>Team Performance Analysis</CardTitle>
-                    </CardHeader>
-                    <CardContent>
+                    </CardHeader>                    <CardContent>
                       <p className="text-gray-500 mb-4">Detailed analysis of team performance across tasks and timelines.</p>
-                      
-                      <div className="space-y-4">
-                        {members?.slice(0, 5).map((member: any, index: number) => (
-                          <div key={member.userId} className="space-y-1">
-                            <div className="flex items-center justify-between">
-                              <span className="text-sm font-medium">{member.user.firstName} {member.user.lastName}</span>
-                              <span className="text-sm text-gray-500">{Math.floor(Math.random() * 20) + 10} tasks</span>
-                            </div>
-                            <Progress value={Math.floor(Math.random() * 100)} className="h-2" />
-                          </div>
+                        <div className="space-y-4">
+                        {currentProject?.userIds?.slice(0, 5).map((userId: string) => (
+                          <TeamMemberPerformance key={userId} userId={userId} />
                         ))}
+                        
+                        {!currentProject?.userIds || currentProject.userIds.length === 0 && (
+                          <div className="text-center py-4 text-gray-500">
+                            No team members found for this project
+                          </div>
+                        )}
                       </div>
                     </CardContent>
                   </Card>
@@ -318,7 +435,7 @@ export default function Analytics() {
                   </div>
                 </div>
               )}
-            </TabsContent>
+            </TabsContent>a
           </Tabs>
         </div>
       </div>

@@ -27,8 +27,7 @@ export default function Tasks() {
     projects, 
     isLoading: isLoadingProjects 
   } = useProject();
-  
-  const {
+    const {
     tasks,
     isLoading: isLoadingTasks,
     createTask,
@@ -37,7 +36,7 @@ export default function Tasks() {
     fetchTasks,
     projectId,
     setProjectId
-  } = useTask();
+  } = useTask(30);
 
   const [activeTab, setActiveTab] = useState("kanban");
   const [isTaskFormOpen, setIsTaskFormOpen] = useState(false);
@@ -50,7 +49,8 @@ export default function Tasks() {
   useEffect(() => {
     if (projects && projects.length > 0 && !projectId) {
       const firstProjectId = projects[0].id;
-      if (firstProjectId) {        setProjectId(firstProjectId);
+      if (firstProjectId) {        
+        setProjectId(firstProjectId);
         fetchTasks(firstProjectId);
       }
     }
@@ -303,7 +303,7 @@ export default function Tasks() {
               setIsEditMode(false);
             }}
             onSubmit={handleTaskFormSubmit}
-            projectId={parseInt(projectId || "0")}
+            projectId={projectId || ""}
             defaultValues={isEditMode ? selectedTask : undefined}
             isEditMode={isEditMode}
           />
@@ -318,8 +318,9 @@ export default function Tasks() {
             task={selectedTask}
             onEdit={handleEditTask}
             onDelete={handleDeleteTask}
-            projectId={parseInt(projectId || "0")}
-          />        </div>
+            projectId={projectId || ""}
+          />        
+          </div>
       </div>
     </div>
   );

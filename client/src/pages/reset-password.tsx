@@ -98,7 +98,8 @@ export default function ResetPassword() {
       console.error("Password change error:", error);
       // Error is already handled by the useUser hook
     }
-  };const handleBackToSettings = () => {
+  };
+  const handleBackToSettings = () => {
     if (isFirstTimeReset) {
       window.location.href = '/landing';
     } else {

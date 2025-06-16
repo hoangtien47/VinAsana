@@ -53,7 +53,7 @@ interface ProjectStats {
 }
 
 interface ProjectAnalyticsProps {
-  projectId: number;
+  projectId: string;
   tasks?: Task[];
   members?: { userId: string; user: User }[];
 }

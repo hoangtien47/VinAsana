@@ -93,7 +93,7 @@ export default function Dashboard() {  const { user } = useAuth();
         };
 
         return {
-          id: parseInt(apiTask.id || "0"),
+          id: apiTask.id || "",
           title: apiTask.name,
           description: apiTask.description,
           status: statusMap[apiTask.status] || "todo",
@@ -123,12 +123,6 @@ export default function Dashboard() {  const { user } = useAuth();
     try {
       const tasksToAnalyze = tasks || [];
 
-      // Debug logging
-      console.log('Dashboard - calculateTaskStats:', {
-        totalTasks: tasksToAnalyze.length,
-        sampleTask: tasksToAnalyze[0],
-        tasksWithDueDate: tasksToAnalyze.filter((t: any) => t?.dueDate).length
-      });
 
       // ...existing code...
       if (tasksToAnalyze.length === 0) {
@@ -146,7 +140,8 @@ export default function Dashboard() {  const { user } = useAuth();
           acc[task.status] = (acc[task.status] || 0) + 1;
         }
         return acc;
-      }, {});      const statusDistribution = [
+      }, {});      
+      const statusDistribution = [
         { name: t('tasks.status.todo'), value: statusCounts.todo || 0, color: "#3b82f6" },
         { name: t('tasks.status.inProgress'), value: statusCounts.in_progress || 0, color: "#f59e0b" },
         { name: t('tasks.status.inReview'), value: statusCounts.in_review || 0, color: "#8b5cf6" },
@@ -236,7 +231,8 @@ export default function Dashboard() {  const { user } = useAuth();
         upcomingDeadlineTasks: upcomingDeadlineTasks
       };
     } catch (error) {
-      console.error("Error calculating task statistics:", error);      return {
+      console.error("Error calculating task statistics:", error);      
+      return {
         statusDistribution: [],
         priorityDistribution: [],
         upcomingDeadlines: 0,

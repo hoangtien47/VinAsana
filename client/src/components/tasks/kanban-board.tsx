@@ -6,6 +6,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { formatDate, getInitials, getPriorityColor, getCurrentApiTimestamp } from "@/lib/utils";
 import { Plus, AlertCircle, Clock } from "lucide-react";
 import { Task, useTask } from "@/hooks/use-task";
+import { useUser } from "@/hooks/use-user";
 
 
 interface KanbanColumn {
@@ -32,6 +33,66 @@ export function KanbanBoard({
   updateTask
 }: KanbanBoardProps) {
   const [columns, setColumns] = useState<KanbanColumn[]>([]);
+  const { getUser } = useUser();
+  const [taskUsers, setTaskUsers] = useState<Record<string, any>>({});
+  const [fetchingUsers, setFetchingUsers] = useState<Set<string>>(new Set());
+  
+  // Function to fetch user data for a task assignee
+  const fetchTaskUser = async (userId: string) => {
+    if (taskUsers[userId] || fetchingUsers.has(userId)) {
+      return; // Already have data or currently fetching
+    }
+
+    setFetchingUsers(prev => new Set(prev).add(userId));
+
+    try {
+      const userData = await getUser(userId);
+      if (userData) {
+        setTaskUsers(prev => ({
+          ...prev,
+          [userId]: userData
+        }));
+      }
+    } catch (error) {
+      console.error(`Failed to fetch user data for ${userId}:`, error);
+      // Set a fallback user data
+      setTaskUsers(prev => ({
+        ...prev,
+        [userId]: {
+          id: userId,
+          nickname: `User ${userId.slice(-4)}`,
+          email: '',
+          avatar: null
+        }
+      }));
+    } finally {
+      setFetchingUsers(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(userId);
+        return newSet;
+      });
+    }
+  };
+  
+  // Effect to fetch user data for task assignees
+  useEffect(() => {
+    const userIdsToFetch = new Set<string>();
+    
+    // Add assignee IDs from tasks that don't have assignee objects
+    if (tasks) {
+      tasks.forEach(task => {
+        if (task.assigneeId && !task.assignee) {
+          userIdsToFetch.add(task.assigneeId);
+        }
+      });
+    }
+    
+    // Fetch user data for all unique user IDs
+    userIdsToFetch.forEach(userId => {
+      fetchTaskUser(userId);
+    });
+  }, [tasks]);
+
   // Define columns
   const columnDefinitions = [
     { id: "todo", title: "To Do" },
@@ -131,7 +192,9 @@ export function KanbanBoard({
           "medium": "MEDIUM",
           "high": "HIGH",
           "urgent": "CRITICAL"
-        };        // Create complete task data for API that matches working edit form structure
+        };        
+        
+        // Create complete task data for API that matches working edit form structure
         const updatedTaskData = {
                     name: draggedTask.title,
           description: draggedTask.description || "",
@@ -228,8 +291,7 @@ export function KanbanBoard({
                                     </div>
                                   )}
                                 </div>
-                                
-                                {task.assignee ? (
+                                  {task.assignee ? (
                                   <div className="flex justify-end">
                                     <Avatar className="h-6 w-6">
                                       <AvatarImage 
@@ -241,6 +303,20 @@ export function KanbanBoard({
                                       </AvatarFallback>
                                     </Avatar>
                                   </div>
+                                ) : task.assigneeId ? (
+                                  (() => {
+                                    const assignedUser = taskUsers[task.assigneeId];
+                                    return assignedUser ? (
+                                      <div className="flex justify-end">
+                                        <Avatar className="h-6 w-6">
+                                          <AvatarImage src={assignedUser.avatar} />
+                                          <AvatarFallback>
+                                            {getInitials(assignedUser.nickname || assignedUser.email || 'User')}
+                                          </AvatarFallback>
+                                        </Avatar>
+                                      </div>
+                                    ) : null;
+                                  })()
                                 ) : null}
                               </div>
                             </div>

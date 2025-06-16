@@ -1,6 +1,9 @@
 import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { format } from "date-fns";
+import { CKEditor } from '@ckeditor/ckeditor5-react';
+import ClassicEditor from '@ckeditor/ckeditor5-build-classic';
+import type { Editor } from '@ckeditor/ckeditor5-core';
 import { 
   Sheet, 
   SheetContent, 
@@ -69,7 +72,7 @@ interface TaskDetailProps {
   task: Task | null;
   onEdit: (task: Task) => void;
   onDelete: (taskId: string) => void;
-  projectId: number;
+  projectId: string;
 }
 
 export function TaskDetail({
@@ -81,7 +84,7 @@ export function TaskDetail({
   projectId
 }: TaskDetailProps) {
   const { user } = useAuth();
-  const { users } = useUser();
+  const { users, getUser } = useUser();
   const { toast } = useToast();
   
   const { 
@@ -127,24 +130,31 @@ export function TaskDetail({
 
   // Use the current task data
   const currentTask = currentTaskData;
-
   const [isLoading, setIsLoading] = useState(false);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [commentUsers, setCommentUsers] = useState<Record<string, any>>({});
+  const [fetchingUsers, setFetchingUsers] = useState<Set<string>>(new Set());
   const [newComment, setNewComment] = useState("");
+  const [newCommentHtml, setNewCommentHtml] = useState("");
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
   const [editingCommentText, setEditingCommentText] = useState("");
+  const [editingCommentHtml, setEditingCommentHtml] = useState("");
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
-
   const handleAddComment = async () => {
-    if (!currentTask || !newComment.trim() || !user?.sub) return;
-    
+    if (!currentTask || !newCommentHtml.trim() || !user?.sub) return;
+
     try {
-      await addComment(currentTask.id, newComment, user.sub);
+      // Strip HTML tags for plain text version
+      const plainText = newCommentHtml.replace(/<[^>]*>/g, '').trim();
+      if (!plainText) return;
+      
+      await addComment(currentTask.id, newCommentHtml, user.sub);
       setNewComment("");
+      setNewCommentHtml("");
       // Refresh task data to show the new comment immediately
       await refreshTaskData();
       toast({
@@ -160,14 +170,18 @@ export function TaskDetail({
       });
     }
   };
-  
-  const handleEditComment = async (commentId: string) => {
-    if (!currentTask || !editingCommentText.trim() || !user?.sub) return;
+    const handleEditComment = async (commentId: string) => {
+    if (!currentTask || !editingCommentHtml.trim() || !user?.sub) return;
     
     try {
-      await updateComment(commentId, editingCommentText, user.sub, currentTask.id);
+      // Strip HTML tags for plain text version
+      const plainText = editingCommentHtml.replace(/<[^>]*>/g, '').trim();
+      if (!plainText) return;
+      
+      await updateComment(commentId, editingCommentHtml, user.sub, currentTask.id);
       setEditingCommentId(null);
       setEditingCommentText("");
+      setEditingCommentHtml("");
       // Refresh task data to show the updated comment immediately
       await refreshTaskData();
       toast({
@@ -204,15 +218,16 @@ export function TaskDetail({
       });
     }
   };
-
   const startEditingComment = (comment: Comment) => {
     setEditingCommentId(comment.id);
     setEditingCommentText(comment.content);
+    setEditingCommentHtml(comment.content);
   };
 
   const cancelEditingComment = () => {
     setEditingCommentId(null);
     setEditingCommentText("");
+    setEditingCommentHtml("");
   };
   
   const handleDeleteTask = async () => {
@@ -309,6 +324,64 @@ export function TaskDetail({
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
   };
 
+  // Function to fetch user data for a comment
+  const fetchCommentUser = async (userId: string) => {
+    if (commentUsers[userId] || fetchingUsers.has(userId)) {
+      return; // Already have data or currently fetching
+    }
+
+    setFetchingUsers(prev => new Set(prev).add(userId));
+
+    try {
+      const userData = await getUser(userId);
+      if (userData) {
+        setCommentUsers(prev => ({
+          ...prev,
+          [userId]: userData
+        }));
+      }
+    } catch (error) {
+      console.error(`Failed to fetch user data for ${userId}:`, error);
+      // Set a fallback user data
+      setCommentUsers(prev => ({
+        ...prev,
+        [userId]: {
+          id: userId,
+          nickname: `User ${userId.slice(-4)}`,
+          email: '',
+          avatar: null
+        }
+      }));
+    } finally {
+      setFetchingUsers(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(userId);
+        return newSet;
+      });
+    }
+  };
+  // Effect to fetch user data for all comment authors and assignee
+  useEffect(() => {
+    const userIdsToFetch = new Set<string>();
+    
+    // Add comment author IDs
+    if (currentTask?.comments) {
+      currentTask.comments.forEach(comment => {
+        userIdsToFetch.add(comment.userId);
+      });
+    }
+    
+    // Add assignee ID if it exists and no assignee object is provided
+    if (currentTask?.assigneeId && !currentTask.assignee) {
+      userIdsToFetch.add(currentTask.assigneeId);
+    }
+    
+    // Fetch user data for all unique user IDs
+    userIdsToFetch.forEach(userId => {
+      fetchCommentUser(userId);
+    });
+  }, [currentTask?.comments, currentTask?.assigneeId, currentTask?.assignee]);
+
   if (!currentTask) return null;
 
   return (
@@ -350,8 +423,7 @@ export function TaskDetail({
                 {currentTask.priority}
               </Badge>
             </div>
-            
-            <div className="flex items-center space-x-2 pt-2">
+              <div className="flex items-center space-x-2 pt-2">
               <div className="text-sm text-gray-500 min-w-[80px]">Assignee:</div>
               {currentTask.assignee ? (
                 <div className="flex items-center">
@@ -363,17 +435,18 @@ export function TaskDetail({
                 </div>
               ) : currentTask.assigneeId ? (
                 (() => {
-                  const assignedUser = users?.find(u => u.id === currentTask.assigneeId);
+                  // Use fetched user data first, then fall back to users array
+                  const assignedUser = commentUsers[currentTask.assigneeId] || users?.find(u => u.id === currentTask.assigneeId);
                   return assignedUser ? (
                     <div className="flex items-center">
                       <Avatar className="h-6 w-6 mr-2">
                         <AvatarImage src={assignedUser.avatar} />
-                        <AvatarFallback>{getInitials(`${assignedUser.nickname || ''} `)}</AvatarFallback>
+                        <AvatarFallback>{getInitials(assignedUser.nickname || assignedUser.email || 'User')}</AvatarFallback>
                       </Avatar>
-                      <span>{assignedUser.nickname}</span>
+                      <span>{assignedUser.nickname || assignedUser.email || `User ${currentTask.assigneeId.slice(-4)}`}</span>
                     </div>
                   ) : (
-                    <span className="text-sm text-gray-500">User {currentTask.assigneeId}</span>
+                    <span className="text-sm text-gray-500">User {currentTask.assigneeId.slice(-4)}</span>
                   );
                 })()
               ) : (
@@ -436,10 +509,10 @@ export function TaskDetail({
               <MessageSquare className="h-4 w-4 mr-1" /> Comments ({currentTask.comments?.length || 0})
             </h3>
             
-            <div className="space-y-4 mb-4">
-              {currentTask.comments && currentTask.comments.length > 0 ? (
+            <div className="space-y-4 mb-4">              {currentTask.comments && currentTask.comments.length > 0 ? (
                 currentTask.comments.map((comment: Comment) => {
-                  const commentUser = users?.find(u => u.id === comment.userId);
+                  // Use fetched comment user data instead of users array
+                  const commentUser = commentUsers[comment.userId] || users?.find(u => u.id === comment.userId);
                   const isOwner = user?.sub === comment.userId;
                   const isEditing = editingCommentId === comment.id;
                   
@@ -449,18 +522,19 @@ export function TaskDetail({
                         <AvatarImage src={commentUser?.avatar} />
                         <AvatarFallback>
                           {commentUser ? 
-                            getInitials(`${commentUser.nickname || ''}`) : 
+                            getInitials(commentUser.nickname || commentUser.email || 'User') : 
                             comment.userId.charAt(0).toUpperCase()
                           }
                         </AvatarFallback>
                       </Avatar>
-                      <div className="flex-1">
+                      <div className="flex-1">                        
                         <div className="flex items-center justify-between">
                           <p className="text-sm font-medium">
-                            {commentUser ? 
-                              `${commentUser.nickname || ''}`.trim() || commentUser.email :
-                              `User ${comment.userId}`
-                            }
+                            {commentUser ? (
+                              commentUser.nickname || commentUser.email || `User ${comment.userId.slice(-4)}`
+                            ) : (
+                              `User ${comment.userId.slice(-4)}`
+                            )}
                           </p>
                           <div className="flex items-center space-x-2">
                             <span className="text-xs text-gray-500">Just now</span>
@@ -488,15 +562,40 @@ export function TaskDetail({
                               </DropdownMenu>
                             )}
                           </div>
-                        </div>
+                        </div>                        
                         {isEditing ? (
                           <div className="mt-2 space-y-2">
-                            <Textarea
-                              value={editingCommentText}
-                              onChange={(e) => setEditingCommentText(e.target.value)}
-                              rows={3}
-                              className="text-sm"
-                            />
+                            <div className="border rounded-md">                              
+                              <CKEditor
+                                editor={ClassicEditor as any}
+                                data={editingCommentHtml}
+                                onChange={(event, editor) => {
+                                  const data = editor.getData();
+                                  setEditingCommentHtml(data);
+                                  // Also set plain text version for validation
+                                  const plainText = data.replace(/<[^>]*>/g, '').trim();
+                                  setEditingCommentText(plainText);
+                                }}                                config={{
+                                  placeholder: 'Edit comment...',
+                                  toolbar: [
+                                    'heading', '|',
+                                    'bold', 'italic', 'underline', '|',
+                                    'bulletedList', 'numberedList', '|',
+                                    'outdent', 'indent', '|',
+                                    'blockQuote', 'insertTable', '|',
+                                    'undo', 'redo'
+                                  ],
+                                  heading: {
+                                    options: [
+                                      { model: 'paragraph', title: 'Paragraph', class: 'ck-heading_paragraph' },
+                                      { model: 'heading1', view: 'h1', title: 'Heading 1', class: 'ck-heading_heading1' },
+                                      { model: 'heading2', view: 'h2', title: 'Heading 2', class: 'ck-heading_heading2' },
+                                      { model: 'heading3', view: 'h3', title: 'Heading 3', class: 'ck-heading_heading3' }
+                                    ]
+                                  }
+                                }}
+                              />
+                            </div>
                             <div className="flex space-x-2">                              
                               <Button 
                                 size="sm" 
@@ -515,11 +614,12 @@ export function TaskDetail({
                                 Cancel
                               </Button>
                             </div>
-                          </div>
-                        ) : (
-                          <p className="text-sm mt-1 text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
-                            {comment.content}
-                          </p>
+                          </div>                        
+                          ) : (
+                          <div 
+                            className="text-sm mt-1 text-gray-700 dark:text-gray-300 prose prose-sm max-w-none dark:prose-invert"
+                            dangerouslySetInnerHTML={{ __html: comment.content }}
+                          />
                         )}
                       </div>
                     </div>
@@ -529,14 +629,37 @@ export function TaskDetail({
                 <div className="text-sm text-gray-500 text-center py-2">No comments yet</div>
               )}
             </div>
-            
-            <div className="space-y-2">
-              <Textarea
-                placeholder="Add a comment..."
-                value={newComment}
-                onChange={(e) => setNewComment(e.target.value)}
-                rows={3}
-              />              
+              <div className="space-y-2">
+              <div className="border rounded-md">                <CKEditor
+                  editor={ClassicEditor as any}
+                  data={newCommentHtml}
+                  onChange={(event, editor) => {
+                    const data = editor.getData();
+                    setNewCommentHtml(data);
+                    // Also set plain text version for validation
+                    const plainText = data.replace(/<[^>]*>/g, '').trim();
+                    setNewComment(plainText);
+                  }}                  config={{
+                    placeholder: 'Add a comment...',
+                    toolbar: [
+                      'heading', '|',
+                      'bold', 'italic', 'underline', '|',
+                      'bulletedList', 'numberedList', '|',
+                      'outdent', 'indent', '|',
+                      'blockQuote', 'insertTable', '|',
+                      'undo', 'redo'
+                    ],
+                    heading: {
+                      options: [
+                        { model: 'paragraph', title: 'Paragraph', class: 'ck-heading_paragraph' },
+                        { model: 'heading1', view: 'h1', title: 'Heading 1', class: 'ck-heading_heading1' },
+                        { model: 'heading2', view: 'h2', title: 'Heading 2', class: 'ck-heading_heading2' },
+                        { model: 'heading3', view: 'h3', title: 'Heading 3', class: 'ck-heading_heading3' }
+                      ]
+                    }
+                  }}
+                />
+              </div>
               <Button 
                 onClick={handleAddComment} 
                 disabled={isAddingComment || !newComment.trim()} 
@@ -558,12 +681,12 @@ export function TaskDetail({
               className="flex items-center"
             >
               <Edit className="h-4 w-4 mr-1" /> Edit
-            </Button>
+            </Button>              
             <Button
-              variant="destructive"
+              variant="outline"
               size="sm"
               onClick={() => setIsDeleteDialogOpen(true)}
-              className="flex items-center"
+              className="flex items-center hover:bg-destructive hover:text-destructive-foreground hover:border-destructive"
             >
               <Trash2 className="h-4 w-4 mr-1" /> Delete
             </Button>

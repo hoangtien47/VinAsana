@@ -74,7 +74,7 @@ export interface UserFilterOptions {
   languageCode?: string;
 }
 
-export function useUser() {
+export function useUser(size?: number, page?: number) {
   const { toast } = useToast();
   const { getAccessTokenSilently, isAuthenticated } = useAuth0();
   const queryClient = useQueryClient();
@@ -110,20 +110,45 @@ export function useUser() {
       const text = await response.text();
       return text ? JSON.parse(text) : null;
     }
-    
-    // For non-JSON responses or empty responses, return null
+      // For non-JSON responses or empty responses, return null
     return null;
   };
-  // Fetch all users
+
+  // Helper function to build users URL with pagination
+  const buildUsersUrl = (paginationParams?: { size?: number; page?: number }) => {
+    const baseUrl = `${apiBaseUrl}/v1/users`;
+    
+    if (!paginationParams || Object.keys(paginationParams).length === 0) {
+      return baseUrl;
+    }
+
+    const urlParams = new URLSearchParams();
+    
+    // Add pagination parameters
+    if (paginationParams.size !== undefined) {
+      urlParams.append('size', paginationParams.size.toString());
+    }
+    
+    if (paginationParams.page !== undefined) {
+      urlParams.append('page', paginationParams.page.toString());
+    }
+
+    // Build final URL
+    const queryString = urlParams.toString();
+    return queryString ? `${baseUrl}?${queryString}` : baseUrl;
+  };  // Fetch all users
   const {
     data: usersData,
     isLoading,
     error,
     refetch,
   } = useQuery<UsersResponse>({
-    queryKey: ["users", filters],    queryFn: () => {
+    queryKey: ["users", filters, size, page],
+    queryFn: () => {
       console.log("Fetching users from API");
-      return authFetch(`${apiBaseUrl}/v1/users`);
+      const url = buildUsersUrl({ size, page });
+      console.log("Fetching users from URL:", url);
+      return authFetch(url);
     },
     enabled: isAuthenticated,
   });
@@ -188,10 +213,32 @@ export function useUser() {
   const applyFilters = (newFilters: UserFilterOptions) => {
     setFilters(newFilters);
   };
-
   // Helper function to clear all filters
   const clearFilters = () => {
     setFilters({});
+  };
+
+  // Fetch users with pagination parameters
+  const fetchUsers = async (paginationParams?: { size?: number; page?: number }) => {
+    const url = buildUsersUrl(paginationParams);
+    
+    return queryClient.fetchQuery({ 
+      queryKey: ["users", "paginated", paginationParams],
+      queryFn: () => authFetch(url)
+    });
+  };
+
+  // Fetch users with filters and pagination
+  const fetchUsersWithFilters = async (filterOptions: UserFilterOptions, paginationParams?: { size?: number; page?: number }) => {
+    // Note: This is a client-side filtering approach. 
+    // For server-side filtering, you'd need to modify the URL building logic
+    setFilters(filterOptions);
+    const url = buildUsersUrl(paginationParams);
+    
+    return queryClient.fetchQuery({ 
+      queryKey: ["users", "filtered", filterOptions, paginationParams],
+      queryFn: () => authFetch(url)
+    });
   };
 
   // Create user mutation
@@ -381,11 +428,12 @@ export function useUser() {
     permissions,
     isLoadingPermissions,
     permissionsError,
-    
-    // Filtering functionality
+      // Filtering functionality
     filters,
     applyFilters,
     clearFilters,
+    fetchUsers,
+    fetchUsersWithFilters,
     hasActiveFilters: Object.keys(filters).some(key => 
       filters[key as keyof UserFilterOptions] !== undefined && 
       (Array.isArray(filters[key as keyof UserFilterOptions]) ? 

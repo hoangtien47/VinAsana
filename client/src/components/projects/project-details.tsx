@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Project } from "@/hooks/use-project";
+import { useUser, ApiUser } from "@/hooks/use-user";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -31,6 +32,43 @@ interface ProjectDetailsProps {
 }
 
 export function ProjectDetails({ project, open, onClose, onEdit }: ProjectDetailsProps) {
+  const [teamMembers, setTeamMembers] = useState<ApiUser[]>([]);
+  const [isLoadingTeamMembers, setIsLoadingTeamMembers] = useState(false);
+  const { getUser } = useUser();  // Fetch team members when dialog opens and project changes
+  useEffect(() => {
+    const fetchTeamMembers = async () => {
+      if (!project || !open || !project.userIds || project.userIds.length === 0) {
+        setTeamMembers([]);
+        return;
+      }
+
+      setIsLoadingTeamMembers(true);
+      try {
+        const members = await Promise.all(
+          project.userIds.map(async (userId) => {
+            try {
+              const user = await getUser(userId);
+              return user;
+            } catch (error) {
+              console.error(`Failed to fetch user ${userId}:`, error);
+              return null;
+            }
+          })
+        );
+        
+        // Filter out null values (failed fetches)
+        setTeamMembers(members.filter((member): member is ApiUser => member !== null));
+      } catch (error) {
+        console.error('Failed to fetch team members:', error);
+        setTeamMembers([]);
+      } finally {
+        setIsLoadingTeamMembers(false);
+      }
+    };
+
+    fetchTeamMembers();
+  }, [project?.id, open, project?.userIds?.join(',')]); // Only depend on project ID, open state, and user IDs
+
   if (!project) return null;
 
   const getStatusInfo = () => {
@@ -56,7 +94,8 @@ export function ProjectDetails({ project, open, onClose, onEdit }: ProjectDetail
 
   return (
     <Dialog open={open} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden">        <DialogHeader className="flex flex-row items-start justify-between space-y-0 pr-12">
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden">       
+        <DialogHeader className="flex flex-row items-start justify-between space-y-0 pr-12">
           <div className="space-y-1">
             <DialogTitle className="text-2xl font-bold line-clamp-2">{project.name}</DialogTitle>
             {project.description && (
@@ -85,9 +124,8 @@ export function ProjectDetails({ project, open, onClose, onEdit }: ProjectDetail
           </TabsList>
 
           <ScrollArea className="h-[calc(90vh-200px)] mt-4">
-            <TabsContent value="overview" className="space-y-6">
-              {/* Status and Quick Stats */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <TabsContent value="overview" className="space-y-6">              {/* Status and Quick Stats */}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <Card>
                   <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                     <CardTitle className="text-sm font-medium">Status</CardTitle>
@@ -119,6 +157,16 @@ export function ProjectDetails({ project, open, onClose, onEdit }: ProjectDetail
                   <CardContent>
                     <div className="text-2xl font-bold">{project.taskCount || 0}</div>
                     <p className="text-xs text-muted-foreground">Total tasks</p>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Team</CardTitle>
+                    <Users className="h-4 w-4 text-muted-foreground" />
+                  </CardHeader>                  <CardContent>
+                    <div className="text-2xl font-bold">{project.userIds?.length || 0}</div>
+                    <p className="text-xs text-muted-foreground">Members</p>
                   </CardContent>
                 </Card>
               </div>
@@ -251,24 +299,39 @@ export function ProjectDetails({ project, open, onClose, onEdit }: ProjectDetail
             </TabsContent>
 
             <TabsContent value="team" className="space-y-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-lg flex items-center gap-2">
+              <Card>                <CardHeader>                  <CardTitle className="text-lg flex items-center gap-2">
                     <Users className="h-5 w-5" />
-                    Team Members
+                    Team Members ({project.userIds?.length || 0})
                   </CardTitle>
                   <CardDescription>
                     Manage project team and permissions
                   </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-center py-8">
-                    <Users className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                    <p className="text-sm text-gray-500">Team management will be displayed here</p>
-                    <p className="text-xs text-gray-400 mt-1">Integrate with team management system</p>
-                    <Button variant="outline" className="mt-4">
-                      Manage Team
-                    </Button>
+                </CardHeader>                <CardContent>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {isLoadingTeamMembers ? (
+                      <div className="col-span-full flex items-center justify-center py-8">
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                        <span className="ml-2 text-sm text-gray-500">Loading team members...</span>
+                      </div>
+                    ) : teamMembers.length > 0 ? (
+                      teamMembers.map(member => (
+                        <div key={member.id} className="flex items-center p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                          <Avatar className="h-10 w-10 mr-4">
+                            <AvatarImage src={member.avatar} alt={member.nickname || member.email} />
+                            <AvatarFallback>{getInitials(member.nickname || member.email)}</AvatarFallback>
+                          </Avatar>
+                          <div className="flex-1">
+                            <p className="text-sm font-medium">{member.nickname || member.email}</p>
+                            <p className="text-xs text-gray-500">{member.email}</p>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="col-span-full text-center py-8">
+                        <p className="text-sm text-gray-500">No team members added yet</p>
+                        <p className="text-xs text-gray-400 mt-1">Integrate with team management system</p>
+                      </div>
+                    )}
                   </div>
                 </CardContent>
               </Card>

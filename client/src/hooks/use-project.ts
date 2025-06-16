@@ -7,15 +7,18 @@ import { fromApiTimestamp, getApiBaseUrl } from "@/lib/utils";
 
 // Project structure from API
 export interface Project {
-  id?: string; // Assuming ID is returned after creation
+  id?: string; 
   name: string;
   description: string;
-  startDate: number; // timestamp
-  endDate: number; // timestamp
-  progress: number; // percentage
-  taskCount: number; // number of tasks in the project
-  doneTaskCount: number; // number of tasks completed
+  startDate: number; 
+  endDate: number; 
+  progress: number; 
+  taskCount: number; 
+  doneTaskCount: number; 
+  userIds: string[];
 }
+
+
 
 // Paginated response structure
 export interface ProjectsResponse {
@@ -30,15 +33,15 @@ export interface ProjectsResponse {
 export interface CreateProjectData {
   name: string;
   description?: string;
-  startDate: number; // timestamp
-  endDate: number; // timestamp
+  startDate: number;
+  endDate: number; 
 }
 
 export interface UpdateProjectData {
   name?: string;
   description?: string;
-  startDate?: number; // timestamp
-  endDate?: number; // timestamp
+  startDate?: number; 
+  endDate?: number; 
 }
 
 export function useProject() {
