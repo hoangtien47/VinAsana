@@ -42,7 +42,8 @@ services:
       - meikocn-network
   api:
     container_name: meikocn-api
-    image: kelvn/meikocn-api:sha-4f7ffe8
+    image: kelvn/meikocn-api:sha-f0c9ce1
+
   #    build:
   #      context: .
   #      dockerfile: Dockerfile

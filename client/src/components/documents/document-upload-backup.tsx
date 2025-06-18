@@ -30,12 +30,8 @@ const documentFormSchema = z.object({
   description: z.string().optional(),
   category: z.enum(["specification", "design", "contract", "invoice", "report", "other"]),
   acl: z.enum(["PUBLIC_READ", "PRIVATE"]),
-  projectId: z.string().min(1, { message: "Project is required" }).refine((value) => value !== "none", {
-    message: "Please select a project"
-  }),
-  taskId: z.string().min(1, { message: "Task is required" }).refine((value) => value !== "none", {
-    message: "Please select a task"
-  }),
+  projectId: z.string().optional(),
+  taskId: z.string().optional(),
 });
 
 type DocumentFormValues = z.infer<typeof documentFormSchema>;
@@ -57,7 +53,7 @@ export function DocumentUpload({
 }: DocumentUploadProps) {
   const { toast } = useToast();
   const { uploadDocument, replaceDocumentFile, updateDocument, isUploading, isUpdating, uploadProgress } = useDocument();  const { projects } = useProject();
-  const [file, setFile] = useState<File | null>(null);
+  const { tasks } = useTask();  const [file, setFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const form = useForm<DocumentFormValues>({
     resolver: zodResolver(documentFormSchema),
@@ -66,29 +62,25 @@ export function DocumentUpload({
       description: "",
       category: "other",
       acl: "PUBLIC_READ",
-      projectId: "",
-      taskId: "",
+      projectId: "none",
+      taskId: "none",
     },
-  });
-  // Watch for project changes to fetch tasks dynamically
+  });  // Watch for project changes to filter tasks
   const selectedProjectId = form.watch("projectId");
-  
-  // Fetch tasks only when a project is selected
-  const { tasks } = useTask(10, 0, selectedProjectId || undefined);
-  
-  // All tasks are already filtered by the API based on selectedProjectId
-  const filteredTasks = tasks || [];
+  const filteredTasks = tasks?.filter((task: any) => 
+    selectedProjectId === "none" || !selectedProjectId || String(task.projectId) === String(selectedProjectId)
+  ) || [];
+
   // Clear task selection when project changes
   useEffect(() => {
     const currentTaskId = form.getValues("taskId");
-    if (currentTaskId && selectedProjectId) {
+    if (currentTaskId && currentTaskId !== "none" && selectedProjectId && selectedProjectId !== "none") {
       const taskStillValid = filteredTasks.some((task: any) => String(task.id) === currentTaskId);
       if (!taskStillValid) {
-        form.setValue("taskId", "");
+        form.setValue("taskId", "none");
       }
     }
-  }, [selectedProjectId, filteredTasks, form]);
-  // Update form values when editDocument changes
+  }, [selectedProjectId, filteredTasks, form]);// Update form values when editDocument changes
   useEffect(() => {
     if (editDocument && isEditMode) {
       form.reset({
@@ -96,8 +88,8 @@ export function DocumentUpload({
         description: editDocument.description || "",
         category: (editDocument.contentType as any) || "other",
         acl: editDocument.acl || "PUBLIC_READ",
-        projectId: editDocument.projectId || "",
-        taskId: editDocument.taskId || "",
+        projectId: editDocument.projectId || "none",
+        taskId: editDocument.taskId || "none",
       });
     } else if (!isEditMode) {
       form.reset({
@@ -105,8 +97,8 @@ export function DocumentUpload({
         description: "",
         category: "other",
         acl: "PUBLIC_READ",
-        projectId: "",
-        taskId: "",
+        projectId: "none",
+        taskId: "none",
       });
     }
     // Clear file when switching modes or documents
@@ -122,7 +114,6 @@ export function DocumentUpload({
       resetForm();
     }
   }, [open]);
-
   const resetForm = () => {
     form.reset();
     setFile(null);
@@ -130,7 +121,6 @@ export function DocumentUpload({
       fileInputRef.current.value = "";
     }
   };
-
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const selectedFile = e.target.files[0];
@@ -147,7 +137,6 @@ export function DocumentUpload({
     e.preventDefault();
     e.stopPropagation();
   };
-
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -161,8 +150,7 @@ export function DocumentUpload({
         form.setValue("name", droppedFile.name);
       }
     }
-  };
-  const onSubmit = async (values: DocumentFormValues) => {
+  };  const onSubmit = async (values: DocumentFormValues) => {
     if (!file && !isEditMode) {
       toast({
         title: "File required",
@@ -171,29 +159,26 @@ export function DocumentUpload({
       });
       return;
     }
-
-    try {
-      if (isEditMode && editDocument) {
+      try {      if (isEditMode && editDocument) {
         // If a new file is selected, replace the existing file (using same key)
         if (file) {
-          await replaceDocumentFile(
+          // Use the new replaceDocumentFile function to keep the same key          await replaceDocumentFile(
             file, 
             editDocument.key, 
             values.category, 
             values.acl, 
             values.description,
-            values.taskId,
-            values.projectId
+            values.taskId === "none" ? undefined : values.taskId,
+            values.projectId === "none" ? undefined : values.projectId
           );
-        } else {
-          // Update existing document metadata only
+        } else {          // Update existing document metadata only
           await updateDocument(editDocument.id, {
             key: editDocument.key, // Keep the same key
             contentType: values.category as any,
             acl: values.acl,
             description: values.description,
-            taskId: values.taskId,
-            projectId: values.projectId,
+            taskId: values.taskId === "none" ? undefined : values.taskId,
+            projectId: values.projectId === "none" ? undefined : values.projectId,
           });
         }
       } else if (file) {
@@ -204,8 +189,8 @@ export function DocumentUpload({
           values.category, 
           values.acl, 
           values.description,
-          values.taskId,
-          values.projectId
+          values.taskId === "none" ? undefined : values.taskId,
+          values.projectId === "none" ? undefined : values.projectId
         );
       }
       
@@ -254,36 +239,26 @@ export function DocumentUpload({
                     </p>
                   </div>
                 </div>
-                <p className="text-xs text-blue-600 dark:text-blue-400 mt-2">
-                  Upload a new file below to replace, or just update the document details.
-                </p>
               </div>
             )}
-
-            {/* File Upload Area */}
-            <input
-              type="file"
-              ref={fileInputRef}
-              onChange={handleFileChange}
-              className="hidden"
-              accept="*/*"
-            />
             
-            <div
-              className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-6 text-center cursor-pointer hover:border-primary transition-colors"
-              onClick={() => fileInputRef.current?.click()}
+            <div 
+              className="border-2 border-dashed rounded-md p-6 flex flex-col items-center justify-center cursor-pointer"
               onDragOver={handleDragOver}
               onDrop={handleDrop}
+              onClick={() => fileInputRef.current?.click()}
             >
+              <input
+                type="file"
+                ref={fileInputRef}
+                className="hidden"
+                onChange={handleFileChange}
+              />
               {file ? (
-                <div className="flex items-center justify-center space-x-3">
-                  <FileText className="h-8 w-8 text-primary" />
-                  <div className="text-left">
-                    <p className="text-sm font-medium">{file.name}</p>
-                    <p className="text-xs text-gray-500">
-                      {(file.size / 1024 / 1024).toFixed(2)} MB
-                    </p>
-                  </div>
+                <div className="text-center">
+                  <FileText className="h-12 w-12 text-green-500 mx-auto mb-2" />
+                  <p className="text-sm font-medium">{file.name}</p>
+                  <p className="text-xs text-gray-500">Click to change file</p>
                   <Button
                     type="button"
                     variant="ghost"
@@ -314,9 +289,7 @@ export function DocumentUpload({
                   </p>
                 </div>
               )}
-            </div>
-
-            <FormField
+            </div>            <FormField
               control={form.control}
               name="name"
               render={({ field }) => (
@@ -356,133 +329,123 @@ export function DocumentUpload({
                   </FormControl>
                   <FormMessage />
                 </FormItem>
-              )}            />
+              )}
+            />
+              <FormField
+              control={form.control}
+              name="category"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Category</FormLabel>
+                  <Select
+                    onValueChange={field.onChange}
+                    defaultValue={field.value}
+                  >
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select a category" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="specification">Specification</SelectItem>
+                      <SelectItem value="design">Design</SelectItem>
+                      <SelectItem value="contract">Contract</SelectItem>
+                      <SelectItem value="invoice">Invoice</SelectItem>
+                      <SelectItem value="report">Report</SelectItem>
+                      <SelectItem value="other">Other</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            
+            <FormField
+              control={form.control}
+              name="acl"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Access Level</FormLabel>
+                  <Select
+                    onValueChange={field.onChange}
+                    defaultValue={field.value}
+                  >
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select access level" />
+                      </SelectTrigger>
+                    </FormControl>                    <SelectContent>
+                      <SelectItem value="PUBLIC_READ">
+                        <div className="flex items-center gap-2">
+                          <Eye className="h-4 w-4" />
+                          Public - Anyone can view
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="PRIVATE">
+                        <div className="flex items-center gap-2">
+                          <Lock className="h-4 w-4" />
+                          Private - Restricted access
+                        </div>
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-sm text-muted-foreground">
+                    Choose who can access this document. Public documents are visible to all users, while private documents have restricted access.
+                  </p>
+                  <FormMessage />                </FormItem>
+              )}
+            />
 
-            {/* Grid layout for Category, Access Level, Project, and Task */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="category"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Category</FormLabel>
-                    <Select
-                      onValueChange={field.onChange}
-                      defaultValue={field.value}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select a category" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="specification">Specification</SelectItem>
-                        <SelectItem value="design">Design</SelectItem>
-                        <SelectItem value="contract">Contract</SelectItem>
-                        <SelectItem value="invoice">Invoice</SelectItem>
-                        <SelectItem value="report">Report</SelectItem>
-                        <SelectItem value="other">Other</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              
-              <FormField
-                control={form.control}
-                name="acl"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Access Level</FormLabel>
-                    <Select
-                      onValueChange={field.onChange}
-                      defaultValue={field.value}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select access level" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="PUBLIC_READ">
-                          <div className="flex items-center gap-2">
-                            <Eye className="h-4 w-4" />
-                            Public - Anyone can view
-                          </div>
+            <FormField
+              control={form.control}
+              name="projectId"
+              render={({ field }) => (                <FormItem>
+                  <FormLabel>Project (Optional)</FormLabel>
+                  <Select
+                    onValueChange={field.onChange}
+                    value={field.value || "none"}
+                  >
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select a project" />
+                      </SelectTrigger>
+                    </FormControl><SelectContent>
+                      <SelectItem value="none">None</SelectItem>
+                      {projects?.map((project: any) => (
+                        <SelectItem key={project.id} value={String(project.id)}>
+                          {project.name}
                         </SelectItem>
-                        <SelectItem value="PRIVATE">
-                          <div className="flex items-center gap-2">
-                            <Lock className="h-4 w-4" />
-                            Private - Restricted access
-                          </div>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />            <FormField
+              control={form.control}
+              name="taskId"
+              render={({ field }) => (
+                <FormItem>                  <FormLabel>Task (Optional)</FormLabel>
+                  <Select
+                    onValueChange={field.onChange}
+                    value={field.value || "none"}
+                  >
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder={selectedProjectId && selectedProjectId !== "none" ? "Select a task from the project" : "Select a task (select project first for filtering)"} />
+                      </SelectTrigger>
+                    </FormControl><SelectContent>
+                      <SelectItem value="none">None</SelectItem>                      {filteredTasks?.map((task: any) => (
+                        <SelectItem key={task.id} value={String(task.id)}>
+                          {task.title} {selectedProjectId && selectedProjectId !== "none" ? "" : `(${projects?.find((p: any) => String(p.id) === String(task.projectId))?.name || "Unknown Project"})`}
                         </SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="projectId"
-                render={({ field }) => (                  <FormItem>
-                    <FormLabel>Project *</FormLabel>
-                    <Select
-                      onValueChange={field.onChange}
-                      value={field.value || ""}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select a project (required)" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {projects?.map((project: any) => (
-                          <SelectItem key={project.id} value={String(project.id)}>
-                            {project.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="taskId"
-                render={({ field }) => (                  <FormItem>
-                    <FormLabel>Task *</FormLabel>
-                    <Select
-                      onValueChange={field.onChange}
-                      value={field.value || ""}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder={selectedProjectId ? "Select a task (required)" : "Select a project first"} />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {filteredTasks?.map((task: any) => (
-                          <SelectItem key={task.id} value={String(task.id)}>
-                            {task.title}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-
-            {/* Access Level Description */}
-            <div className="text-sm text-muted-foreground">
-              <strong>Access Level:</strong> Public documents are visible to all users, while private documents have restricted access.
-            </div>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
               
             {(isUploading || isUpdating) && (
               <div className="space-y-2">
@@ -493,8 +456,7 @@ export function DocumentUpload({
                 <Progress value={isEditMode ? 100 : uploadProgress} />
               </div>
             )}
-
-            <DialogFooter>
+              <DialogFooter>
               <Button type="button" variant="outline" onClick={onClose} disabled={isUploading || isUpdating}>
                 Cancel
               </Button>

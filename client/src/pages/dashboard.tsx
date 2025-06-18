@@ -14,7 +14,7 @@ import { useProject, CreateProjectData } from "@/hooks/use-project";
 import { useUser } from "@/hooks/use-user";
 import { useI18n, useUserLanguageSync } from "@/hooks/use-i18n";
 import { useAuth0 } from "@auth0/auth0-react";
-import { getApiBaseUrl } from "@/lib/utils";
+import { getApiBaseUrl, fromApiTimestamp } from "@/lib/utils";
 import { 
   LayoutDashboard, 
   CheckSquare, 
@@ -62,7 +62,7 @@ export default function Dashboard() {  const { user } = useAuth();
         throw new Error("User is not authenticated");
       }
         const token = await getAccessTokenSilently();
-      const response = await fetch(`${apiBaseUrl}/v1/tasks`, {
+      const response = await fetch(`${apiBaseUrl}/v1/tasks?size=1000&page=0`, {
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
@@ -90,18 +90,17 @@ export default function Dashboard() {  const { user } = useAuth();
           "MEDIUM": "medium",
           "HIGH": "high", 
           "CRITICAL": "urgent"
-        };
-
-        return {
+        };        return {
           id: apiTask.id || "",
           title: apiTask.name,
           description: apiTask.description,
           status: statusMap[apiTask.status] || "todo",
           priority: priorityMap[apiTask.priority] || "medium",
-          dueDate: apiTask.endDate ? new Date(apiTask.endDate).toISOString() : undefined,
+          dueDate: apiTask.endDate ? fromApiTimestamp(apiTask.endDate)?.toISOString() : undefined,
           assigneeId: apiTask.assigneeId,
+          projectId: apiTask.projectId,
           order: 0,
-          createdAt: apiTask.startDate ? new Date(apiTask.startDate).toISOString() : new Date().toISOString()
+          createdAt: apiTask.startDate ? fromApiTimestamp(apiTask.startDate)?.toISOString() : new Date().toISOString()
         };
       }) || [];
 
@@ -161,7 +160,7 @@ export default function Dashboard() {  const { user } = useAuth();
         { name: t('tasks.priority.urgent'), value: priorityCounts.urgent || 0, color: "#ef4444" },
       ].filter(item => item.value > 0);      // Calculate upcoming deadlines (tasks due in next 7 days)
       const now = new Date();
-      const nextWeek = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+      const nextWeek = new Date(now.getTime() + 7 * 24 * 60 * 60);
       
       console.log('Dashboard - Upcoming deadlines calculation:', {
         now: now.toISOString(),
@@ -195,9 +194,12 @@ export default function Dashboard() {  const { user } = useAuth();
         } catch (error) {
           console.error('Error processing task due date:', error, task);
           return false;
-        }}).map((task: any) => {
+        }      }).map((task: any) => {
         // Find project info if available
-        const taskProject = projects?.find((p: any) => p.id === task.projectId);
+        console.log('Looking for project:', { taskProjectId: task.projectId, taskProjectIdType: typeof task.projectId });
+        console.log('Available projects:', projects?.map(p => ({ id: p.id, name: p.name, idType: typeof p.id })));
+        
+        const taskProject = projects?.find((p: any) => String(p.id) === String(task.projectId));
         // Find user info if available
         const taskAssignee = users?.find((u: any) => u.id === task.assigneeId);
         
@@ -206,9 +208,8 @@ export default function Dashboard() {  const { user } = useAuth();
           // Add project info
           project: taskProject ? {
             id: taskProject.id,
-            name: taskProject.name
-          } : {
-            id: 0,
+            name: taskProject.name          } : {
+            id: task.projectId || "unknown",
             name: "Unknown Project"
           },
           // Add assignee info  
@@ -317,13 +318,17 @@ export default function Dashboard() {  const { user } = useAuth();
                   priorityDistribution={taskStats.priorityDistribution}
                 />
               )}
-            </div>            {/* Upcoming Deadlines & Activity Feed */}
+            </div>            
+            {/* Upcoming Deadlines & Activity Feed */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <UpcomingDeadlines tasks={taskStats.upcomingDeadlineTasks || []} />
               {/* <ActivityFeed activities={recentActivities} /> */}
-            </div>{/* Create New Project Button */}
-            {/*!isLoadingProjects &&*/ (!projects || projects.length === 0) && (
-              <div className="flex justify-center mt-8">                <div className="text-center bg-white dark:bg-gray-800 p-8 rounded-lg shadow-sm w-full max-w-2xl">
+            </div>
+            {/* Create New Project Button */}
+            {/*!isLoadingProjects &&*/ 
+            (!projects || projects.length === 0) && (
+              <div className="flex justify-center mt-8">                
+                <div className="text-center bg-white dark:bg-gray-800 p-8 rounded-lg shadow-sm w-full max-w-2xl">
                   <Calendar className="h-12 w-12 text-primary mx-auto mb-4" />
                   <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{t('dashboard.getStartedTitle')}</h2>
                   <p className="mt-2 text-gray-600 dark:text-gray-400 max-w-md mx-auto">

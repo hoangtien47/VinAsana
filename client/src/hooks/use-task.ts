@@ -69,7 +69,7 @@ export interface CreateTaskData {
   comments?: Comment[];
 }
 
-export function useTask(size?: number, page?: number) {
+export function useTask(size?: number, page?: number, filterProjectId?: string) {
   const { toast } = useToast();
   const { getAccessTokenSilently, isAuthenticated } = useAuth0();
   const [projectId, setProjectId] = useState<string | null>(null);
@@ -157,7 +157,9 @@ export function useTask(size?: number, page?: number) {
     
     // For non-JSON responses or empty responses, return null
     return null;
-  };  // Helper function to build filter URL
+  };  
+  
+  // Helper function to build filter URL
   const buildTasksUrl = (filters?: { projectId?: string; status?: string; priority?: string; assigneeId?: string; size?: number; page?: number }) => {
     const baseUrl = `${apiBaseUrl}/v1/tasks`;
     const urlParams = new URLSearchParams();
@@ -198,12 +200,11 @@ export function useTask(size?: number, page?: number) {
     if (filterParts.length > 0) {
       const filterString = filterParts.join('%20AND%20'); // URL encoded " AND "
       urlParams.append('filter', filterString);
-    }
-
-    // Build final URL
+    }    // Build final URL
     const queryString = urlParams.toString();
     return queryString ? `${baseUrl}?${queryString}` : baseUrl;
   };
+  
   // Fetch tasks for the active project
   const {
     data: tasksData,
@@ -211,19 +212,20 @@ export function useTask(size?: number, page?: number) {
     error,
     refetch,
   } = useQuery<TasksResponse>({
-    queryKey: ["tasks", projectId, size, page],
+    queryKey: ["tasks", filterProjectId || projectId, size, page],
     queryFn: () => {
-      const filters = projectId ? { projectId, size, page } : { size, page };
+      const effectiveProjectId = filterProjectId || projectId;
+      const filters = effectiveProjectId ? { projectId: effectiveProjectId, size, page } : { size, page };
       const url = buildTasksUrl(filters);
       console.log("Fetching tasks from URL:", url);
       return authFetch(url);
     },
-    enabled: isAuthenticated && !!projectId,
+    enabled: isAuthenticated && (!!filterProjectId || !!projectId),
   });
   
   // Transform API tasks to frontend tasks
   const tasks = tasksData?.items?.map(transformTask) || [];
-  console.log("Transformed Tasks:", tasks);
+
   // Fetch tasks with filters
   const fetchTasks = async (newProjectId: string, additionalFilters?: { status?: string; priority?: string; assigneeId?: string; size?: number; page?: number }) => {
     setProjectId(newProjectId);
@@ -240,7 +242,6 @@ export function useTask(size?: number, page?: number) {
   // Fetch tasks with custom filters (useful for advanced filtering)
   const fetchTasksWithFilters = async (filters: { projectId?: string; status?: string; priority?: string; assigneeId?: string; size?: number; page?: number }) => {
     const url = buildTasksUrl(filters);
-    console.log("Fetching tasks with filters:", url);
     
     return queryClient.fetchQuery({ 
       queryKey: ["tasks", "filtered", filters],
@@ -365,6 +366,7 @@ export function useTask(size?: number, page?: number) {
       });
     },
   });
+  
   // Get a single task by ID - using mutation for manual control
   const getTaskByIdMutation = useMutation({    mutationFn: async (taskId: string) => {
       try {

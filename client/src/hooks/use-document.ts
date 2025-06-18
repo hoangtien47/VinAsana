@@ -11,6 +11,8 @@ export interface Document {
   id: number;
   key: string;
   url: string;
+  taskId: string;
+  projectId: string;
   contentType: 'specification' | 'design' | 'contract' | 'invoice' | 'report' | 'other';
   acl: 'PUBLIC_READ' | 'PRIVATE';
   description?: string;
@@ -206,7 +208,15 @@ export function useDocument() {
       });
   };
     
-  const uploadDocument = async (file: File, fileName?: string, category: string = 'other', acl: 'PUBLIC_READ' | 'PRIVATE' = 'PUBLIC_READ', description?: string) => {
+  const uploadDocument = async (
+    file: File, 
+    fileName?: string, 
+    category: string = 'other', 
+    acl: 'PUBLIC_READ' | 'PRIVATE' = 'PUBLIC_READ', 
+    description?: string,
+    taskId?: string,
+    projectId?: string
+  ) => {
     setIsUploading(true);
     setUploadProgress(0);
 
@@ -228,15 +238,16 @@ export function useDocument() {
       const fileUrl = await uploadToS3(file, presignedData);
 
 
-      setUploadProgress(90);      
-        // Step 3: Save document metadata to your database
+      setUploadProgress(90);          // Step 3: Save document metadata to your database
       const documentData = {
         key: key,
         url: presignedData.url.split('?')[0],
         contentType: contentType,
         acl: acl,
         description: description,
-      };      console.log("Saving document metadata:", documentData);
+        taskId: taskId,
+        projectId: projectId,
+      };console.log("Saving document metadata:", documentData);
 
       const token = await getAccessTokenSilently();
       const saveResponse = await fetch(`${apiBaseUrl}/v1/files`, {
@@ -316,7 +327,15 @@ export function useDocument() {
   };
   
   // Function to replace an existing document file while keeping the same key
-  const replaceDocumentFile = async (file: File, existingKey: string, category: string = 'other', acl: 'PUBLIC_READ' | 'PRIVATE' = 'PUBLIC_READ', description?: string) => {
+  const replaceDocumentFile = async (
+    file: File, 
+    existingKey: string, 
+    category: string = 'other', 
+    acl: 'PUBLIC_READ' | 'PRIVATE' = 'PUBLIC_READ', 
+    description?: string,
+    taskId?: string,
+    projectId?: string
+  ) => {
     setIsUploading(true);
     setUploadProgress(0);
 
@@ -341,15 +360,16 @@ export function useDocument() {
       console.log("S3 replacement upload completed, file URL:", fileUrl);
 
       setUploadProgress(90);      
-        
-      // Step 3: Update document metadata in your database
+          // Step 3: Update document metadata in your database
       const documentData = {
         key: key,
         url: presignedData.url.split('?')[0],
         contentType: contentType,
         acl: acl,
         description: description,
-      };      console.log("Updating document metadata:", documentData);
+        taskId: taskId,
+        projectId: projectId,
+      };console.log("Updating document metadata:", documentData);
 
       const token = await getAccessTokenSilently();
       const saveResponse = await fetch(`${apiBaseUrl}/v1/files`, {
